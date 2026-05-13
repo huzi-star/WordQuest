@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "WordQuest Pakistan",
+    "slug": "wordquest-pakistan",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "backgroundColor": "#0f172a",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "com.wordquest.pakistan",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.wordquest.pakistan"
+    }
+  }
+}
