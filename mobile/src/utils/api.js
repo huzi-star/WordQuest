@@ -5,7 +5,7 @@
 
 import axios from 'axios';
 
-export const BASE_URL = 'https://puzzle-sigma-eight.vercel.app';
+export const BASE_URL = 'https://puzzle-gules-chi.vercel.app';
 
 
 const client = axios.create({
