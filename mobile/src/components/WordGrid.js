@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Dimensions, PanResponder } from 'react-native';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -23,27 +23,40 @@ export default function WordGrid({
   propsRef.current = { grid, onCellEnter, onSelectionEnd };
 
   const measure = () => {
-    if (gridRef.current && gridRef.current.measureInWindow) {
-      gridRef.current.measureInWindow((x, y) => {
-        originRef.current = { x, y };
+    if (gridRef.current && gridRef.current.measure) {
+      gridRef.current.measure((x, y, w, h, pageX, pageY) => {
+        if (typeof pageX === 'number' && typeof pageY === 'number') {
+          originRef.current = { x: pageX, y: pageY };
+        }
       });
     }
   };
 
-  const touchHandler = (evt) => {
+  // Convert an absolute touch position into a grid cell.
+  // Use pageX/pageY minus measured grid origin. This is the only reliable
+  // approach when PanResponder is on the parent and cells are child Views —
+  // locationX/locationY would be relative to whichever child was hit.
+  const pointToCell = (evt) => {
     const g = propsRef.current.grid;
-    if (!g || !g.length) return;
-    const relX = evt.nativeEvent.pageX - originRef.current.x;
-    const relY = evt.nativeEvent.pageY - originRef.current.y;
+    if (!g || !g.length) return null;
+    const ne = evt.nativeEvent;
+    const relX = ne.pageX - originRef.current.x;
+    const relY = ne.pageY - originRef.current.y;
     const c = Math.floor(relX / CELL_WITH_MARGIN);
     const r = Math.floor(relY / CELL_WITH_MARGIN);
-    if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return;
+    if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return null;
+    return { r, c, letter: g[r][c] };
+  };
+
+  const touchHandler = (evt) => {
+    const cell = pointToCell(evt);
+    if (!cell) return;
     const last = lastCellRef.current;
-    if (last && last.r === r && last.c === c) return;
-    lastCellRef.current = { r, c };
+    if (last && last.r === cell.r && last.c === cell.c) return;
+    lastCellRef.current = cell;
     gestureCountRef.current += 1;
     if (propsRef.current.onCellEnter) {
-      propsRef.current.onCellEnter(r, c, g[r][c]);
+      propsRef.current.onCellEnter(cell.r, cell.c, cell.letter);
     }
   };
 
@@ -54,7 +67,6 @@ export default function WordGrid({
       onPanResponderGrant: (evt) => {
         gestureCountRef.current = 0;
         lastCellRef.current = null;
-        // Re-measure on each touch start in case keyboard or layout shifted.
         measure();
         touchHandler(evt);
       },
@@ -71,6 +83,17 @@ export default function WordGrid({
       },
     })
   ).current;
+
+  // Re-measure shortly after mount to catch any post-render layout shifts
+  // (status bar, safe-area insets, font loading on Android).
+  useEffect(() => {
+    const t1 = setTimeout(measure, 100);
+    const t2 = setTimeout(measure, 500);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
 
   const isSelected = (r, c) => selectedCells.some((s) => s.r === r && s.c === c);
   const isFound = (r, c) => foundCells.some((s) => s.r === r && s.c === c);
