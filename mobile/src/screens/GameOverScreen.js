@@ -121,10 +121,10 @@ export default function GameOverScreen({ navigation, route }) {
         </View>
 
         <TouchableOpacity
-          style={styles.chaalbaazBtn}
-          onPress={() => navigation.navigate('Chaalbaaz', { sessionStats })}
+          style={styles.statsBtn}
+          onPress={() => navigation.navigate('Stats')}
         >
-          <Text style={styles.chaalbaazText}>😏 Chaalbaaz se baat karo</Text>
+          <Text style={styles.statsText}>📊 My Stats Dashboard</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -177,8 +177,8 @@ const styles = StyleSheet.create({
   practiceChip: { backgroundColor: '#0f172a', borderColor: '#22c55e', borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
   practiceText: { color: '#22c55e', fontWeight: 'bold', letterSpacing: 1 },
   nextMove: { color: '#cbd5e1', marginTop: 6, fontStyle: 'italic' },
-  chaalbaazBtn: { backgroundColor: '#7f1d1d', borderColor: '#f97316', borderWidth: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  chaalbaazText: { color: '#fcd34d', fontWeight: 'bold', fontSize: 16 },
+  statsBtn: { backgroundColor: '#1e293b', borderColor: '#22c55e', borderWidth: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  statsText: { color: '#22c55e', fontWeight: 'bold', fontSize: 16 },
   restartBtn: { backgroundColor: '#22c55e', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   restartText: { color: '#0f172a', fontWeight: 'bold', fontSize: 18 },
   homeBtn: { backgroundColor: '#1e293b', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },

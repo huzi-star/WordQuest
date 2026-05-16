@@ -69,11 +69,11 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.chaalbaazBtn}
+          style={styles.statsBtn}
           activeOpacity={0.85}
-          onPress={() => navigation.navigate('Chaalbaaz', { sessionStats: { streak: bestStreak } })}
+          onPress={() => navigation.navigate('Stats')}
         >
-          <Text style={styles.chaalbaazText}>😏 Chaalbaaz se baat karo</Text>
+          <Text style={styles.statsText}>📊 My Stats Dashboard</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -92,6 +92,6 @@ const styles = StyleSheet.create({
   bottom: { marginBottom: 40 },
   playBtn: { backgroundColor: '#22c55e', paddingVertical: 18, borderRadius: 12, alignItems: 'center' },
   playText: { color: '#0f172a', fontSize: 20, fontWeight: 'bold' },
-  chaalbaazBtn: { backgroundColor: '#7f1d1d', borderColor: '#f97316', borderWidth: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  chaalbaazText: { color: '#fcd34d', fontSize: 16, fontWeight: 'bold' },
+  statsBtn: { backgroundColor: '#1e293b', borderColor: '#22c55e', borderWidth: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 10 },
+  statsText: { color: '#22c55e', fontSize: 16, fontWeight: 'bold' },
 });

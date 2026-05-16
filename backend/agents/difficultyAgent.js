@@ -1,5 +1,15 @@
 // difficultyAgent.js
 // Pure logic agent — decides next-round difficulty from player stats.
+// Grid size also scales with difficulty:
+//   easy   → 6x6  (smaller, fewer words, beginner-friendly)
+//   medium → 8x8  (balanced)
+//   hard   → 12x12 (bigger, more words, longer words allowed)
+
+const DIFFICULTY_CONFIG = {
+  easy:   { difficulty: 'easy',   timeLimit: 90, wordCount: 4, gridSize: 6 },
+  medium: { difficulty: 'medium', timeLimit: 75, wordCount: 6, gridSize: 8 },
+  hard:   { difficulty: 'hard',   timeLimit: 60, wordCount: 8, gridSize: 12 },
+};
 
 function difficultyAgent(playerStats = {}) {
   const {
@@ -8,49 +18,32 @@ function difficultyAgent(playerStats = {}) {
     avgTimeLeft = 0,
   } = playerStats;
 
-  // First round defaults
+  // First round → easy.
   if (!roundsPlayed || roundsPlayed === 0) {
     return {
-      difficulty: 'easy',
-      timeLimit: 90,
-      wordCount: 4,
-      gridSize: 8,
-      reason: 'Pehla round — easy se shuru karte hain!',
+      ...DIFFICULTY_CONFIG.easy,
+      reason: 'Pehla round — chhota grid se shuru karte hain!',
     };
   }
 
-  // We don't know totalWords historically — assume the agent ran with the
-  // wordCount used in the previous round category. Use a reasonable
-  // denominator of 5 for ratio calculations as a rolling average baseline.
-  const assumedTotal = 5;
-  const assumedTime = 60;
-
-  const wordsRatio = avgWordsFound / assumedTotal;
-  const timeRatio = avgTimeLeft / assumedTime;
+  // Performance heuristic — assume a baseline of 5 words & 60 s.
+  const wordsRatio = avgWordsFound / 5;
+  const timeRatio = avgTimeLeft / 60;
 
   if (wordsRatio > 0.8 && timeRatio > 0.4) {
     return {
-      difficulty: 'hard',
-      timeLimit: 45,
-      wordCount: 6,
-      gridSize: 8,
-      reason: 'Tumne zyada words dhoondhe — ab hard!',
+      ...DIFFICULTY_CONFIG.hard,
+      reason: 'Tum bohot acha kar rahe ho — 12x12 grid, hard mode!',
     };
   } else if (wordsRatio > 0.5) {
     return {
-      difficulty: 'medium',
-      timeLimit: 60,
-      wordCount: 5,
-      gridSize: 8,
-      reason: 'Acha performance — medium level',
+      ...DIFFICULTY_CONFIG.medium,
+      reason: 'Acha performance — 8x8 grid, medium level',
     };
   } else {
     return {
-      difficulty: 'easy',
-      timeLimit: 90,
-      wordCount: 4,
-      gridSize: 8,
-      reason: 'Practice karo — easy level',
+      ...DIFFICULTY_CONFIG.easy,
+      reason: 'Practice karo — chhota 6x6 grid, easy words',
     };
   }
 }

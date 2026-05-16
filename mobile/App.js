@@ -9,7 +9,7 @@ import CategoryScreen from './src/screens/CategoryScreen';
 import GameScreen from './src/screens/GameScreen';
 import RoundCompleteScreen from './src/screens/RoundCompleteScreen';
 import GameOverScreen from './src/screens/GameOverScreen';
-import ChaalbaazChatScreen from './src/screens/ChaalbaazChatScreen';
+import StatsScreen from './src/screens/StatsScreen';
 
 const Stack = createStackNavigator();
 
@@ -44,7 +44,7 @@ export default function App() {
           <Stack.Screen name="Game" component={GameScreen} options={{ headerShown: false }} />
           <Stack.Screen name="RoundComplete" component={RoundCompleteScreen} options={{ headerShown: false }} />
           <Stack.Screen name="GameOver" component={GameOverScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Chaalbaaz" component={ChaalbaazChatScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Stats" component={StatsScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

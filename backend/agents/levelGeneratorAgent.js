@@ -73,28 +73,28 @@ function placeWord(grid, word, size) {
   return false;
 }
 
-function buildLocalPuzzle(difficulty, wordCount, lastCategory) {
+function buildLocalPuzzle(difficulty, wordCount, lastCategory, gridSize = 8) {
   const pool = CATEGORIES.filter(c => c.name !== lastCategory);
   const cat = pool[Math.floor(Math.random() * pool.length)];
   const maxLen = difficulty === 'easy' ? 6 : difficulty === 'medium' ? 8 : 10;
+  // Words must also fit inside the grid.
+  const fitLen = Math.min(maxLen, gridSize);
   const unique = Array.from(new Set(cat.words.map(w => w.toUpperCase())));
-  const filtered = unique.filter(w => w.length <= maxLen);
+  const filtered = unique.filter(w => w.length <= fitLen);
   const chosen = filtered.slice(0, wordCount);
-  // If filter trimmed too much, top up with any remaining unique words.
   for (const w of unique) {
     if (chosen.length >= wordCount) break;
-    if (!chosen.includes(w)) chosen.push(w);
+    if (!chosen.includes(w) && w.length <= gridSize) chosen.push(w);
   }
 
-  const size = 8;
-  const grid = emptyGrid(size);
+  const grid = emptyGrid(gridSize);
   const positions = [];
   for (const w of chosen) {
-    const p = placeWord(grid, w, size);
+    const p = placeWord(grid, w, gridSize);
     if (p) positions.push(p);
   }
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
+  for (let r = 0; r < gridSize; r++) {
+    for (let c = 0; c < gridSize; c++) {
       if (!grid[r][c]) grid[r][c] = randLetter();
     }
   }
@@ -109,55 +109,39 @@ function buildLocalPuzzle(difficulty, wordCount, lastCategory) {
 }
 
 async function levelGeneratorAgent(difficultyData) {
-  const { difficulty, wordCount } = difficultyData;
+  const { difficulty, wordCount, gridSize = 8 } = difficultyData;
   const lastCategory = difficultyData.lastCategory || '';
   const apiKey = process.env.GEMINI_API_KEY;
 
+  // Always build a local puzzle so we have a guaranteed valid grid of the
+  // requested size — Gemini's grid validation is unreliable for non-8x8.
+  // Gemini is then asked to pick category + funFact, words come from local
+  // pool. This guarantees a valid playable grid every time.
+  const localPuzzle = buildLocalPuzzle(difficulty, wordCount, lastCategory, gridSize);
+
   if (!apiKey || apiKey === 'your_key_here') {
-    return buildLocalPuzzle(difficulty, wordCount, lastCategory);
+    return localPuzzle;
   }
 
+  // Optional: ask Gemini ONLY for a richer fun fact about the chosen category.
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const prompt = `You are writing a one-sentence interesting fun fact (Roman Urdu mix English) about the Pakistani category "${localPuzzle.category}". Max 25 words. Output ONLY the sentence.`;
 
-    const prompt = `You are a game level generator for a Pakistan-themed word search puzzle game.
-
-Difficulty: ${difficulty}
-Word Count Needed: ${wordCount}
-
-Generate a word search puzzle with these rules:
-1. Choose ONE category from:
-   Pakistani Cities, Pakistani Foods, Cricket Players,
-   Urdu Words, Pakistan Districts, Pakistani Singers,
-   PSL Teams, Pakistani Fruits, Pakistani Monuments,
-   Pakistani Heroes
-2. Do NOT repeat last category: ${lastCategory}
-3. Generate exactly ${wordCount} words for that category
-   - Easy: common well-known words, max 6 letters
-   - Medium: moderate words, max 8 letters
-   - Hard: longer/rare words, max 10 letters
-4. Create an 8x8 letter grid with words hidden inside (horizontal and vertical only, no diagonal)
-5. Fill remaining spaces with random capital letters
-
-Return ONLY valid JSON with keys: category, categoryEmoji, words (array of UPPERCASE strings), grid (8 arrays of 8 single capital letters), wordPositions (array of {word,startRow,startCol,direction}), funFact (string).`;
-
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const cleaned = text.replace(/```json|```/g, '').trim();
-    const jsonStart = cleaned.indexOf('{');
-    const jsonEnd = cleaned.lastIndexOf('}');
-    const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
-
-    if (!parsed.grid || !Array.isArray(parsed.grid) || parsed.grid.length !== 8) {
-      throw new Error('Invalid grid from Gemini');
+    const result = await Promise.race([
+      model.generateContent(prompt),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('funfact timeout')), 6000)),
+    ]);
+    const text = (result.response.text() || '').trim().replace(/^["']|["']$/g, '');
+    if (text && text.length < 200) {
+      localPuzzle.funFact = text;
     }
-    parsed.words = (parsed.words || []).map(w => String(w).toUpperCase());
-    return parsed;
   } catch (err) {
-    console.warn('[levelGeneratorAgent] Gemini failed, using fallback:', err.message);
-    return buildLocalPuzzle(difficulty, wordCount, lastCategory);
+    // keep static funFact
   }
+
+  return localPuzzle;
 }
 
 module.exports = levelGeneratorAgent;

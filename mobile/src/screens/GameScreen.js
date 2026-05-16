@@ -23,6 +23,9 @@ export default function GameScreen({ navigation, route }) {
   const [popups, setPopups] = useState([]); // { id, text, x, y, color }
   const [showConfetti, setShowConfetti] = useState(false);
   const [justFoundCells, setJustFoundCells] = useState([]);
+  const [hintsLeft, setHintsLeft] = useState(3);
+  const [revealedHints, setRevealedHints] = useState([]); // cells revealed by hint
+  const [hintsUsedThisRound, setHintsUsedThisRound] = useState(0);
   const timeLeftRef = useRef(difficulty.timeLimit);
   const shake = useRef(new Animated.Value(0)).current;
   const popupIdRef = useRef(0);
@@ -103,6 +106,43 @@ export default function GameScreen({ navigation, route }) {
   }
 
   function clearSelection() { setSelected([]); }
+
+  function useHint() {
+    if (hintsLeft <= 0) {
+      showAgent('Hints khatam — agle round mein milenge', 2200);
+      return;
+    }
+    // Find an unfound word and reveal one of its cells.
+    const unfound = (level.wordPositions || []).filter(
+      (p) => !foundWords.includes(String(p.word).toUpperCase())
+    );
+    if (!unfound.length) {
+      showAgent('Sab words mil gaye — koi hint nahi chahiye 😄', 2200);
+      return;
+    }
+    const pick = unfound[Math.floor(Math.random() * unfound.length)];
+    // Pick the first cell of that word that isn't already revealed.
+    const wordCells = [];
+    for (let i = 0; i < pick.word.length; i++) {
+      if (pick.direction === 'horizontal') {
+        wordCells.push({ r: pick.startRow, c: pick.startCol + i });
+      } else {
+        wordCells.push({ r: pick.startRow + i, c: pick.startCol });
+      }
+    }
+    const stillHidden = wordCells.filter(
+      (cell) => !revealedHints.some((h) => h.r === cell.r && h.c === cell.c)
+    );
+    const reveal = stillHidden[0] || wordCells[0];
+
+    setRevealedHints((arr) => [...arr, reveal]);
+    setHintsLeft((n) => n - 1);
+    setHintsUsedThisRound((n) => n + 1);
+    setScore((s) => Math.max(0, s - 30));
+    spawnPopup('-30 💡', 180, 360, '#f97316');
+    Vibration.vibrate(60);
+    showAgent(`💡 Hint: "${pick.word}" — ${pick.direction === 'horizontal' ? 'horizontal' : 'vertical'} mein, row ${reveal.r + 1} col ${reveal.c + 1}`, 3200);
+  }
 
   function findWordPositionCells(word) {
     const pos = (level.wordPositions || []).find(p => p.word.toUpperCase() === word);
@@ -241,7 +281,16 @@ export default function GameScreen({ navigation, route }) {
     const roundNumber = sessionStats.round;
     const newHistory = [
       ...(sessionStats.history || []),
-      { wordsFound, totalWords: wordList.length, timeLeft, scoreDelta: finalScore - (sessionStats.score || 0) },
+      {
+        wordsFound,
+        totalWords: wordList.length,
+        timeLeft,
+        scoreDelta: finalScore - (sessionStats.score || 0),
+        category: level.category,
+        hintsUsed: hintsUsedThisRound,
+        timeSpent: Math.max(0, difficulty.timeLimit - timeLeft),
+        perfect: wordsFound === wordList.length,
+      },
     ];
     const avgWords = newHistory.reduce((a, h) => a + h.wordsFound, 0) / newHistory.length;
     const avgTime = newHistory.reduce((a, h) => a + h.timeLeft, 0) / newHistory.length;
@@ -272,6 +321,9 @@ export default function GameScreen({ navigation, route }) {
         roundScore: finalScore - (sessionStats.score || 0),
         roundNumber,
         streak: finalStreak,
+        category: level.category,
+        hintsUsed: hintsUsedThisRound,
+        timeSpent: Math.max(0, difficulty.timeLimit - timeLeft),
       },
     });
   }
@@ -317,14 +369,22 @@ export default function GameScreen({ navigation, route }) {
           selectedCells={selected}
           foundCells={foundCells}
           justFoundCells={justFoundCells}
+          hintedCells={revealedHints}
         />
       </Animated.View>
 
       <WordList words={wordList} foundWords={foundWords} currentSelection={currentSelection} />
 
       <View style={styles.actions}>
+        <TouchableOpacity
+          style={[styles.btn, styles.hintBtn, hintsLeft <= 0 && { opacity: 0.5 }]}
+          onPress={useHint}
+          disabled={hintsLeft <= 0}
+        >
+          <Text style={styles.btnText}>💡 Hint ({hintsLeft})</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={[styles.btn, styles.clearBtn]} onPress={clearSelection}>
-          <Text style={styles.btnText}>Clear</Text>
+          <Text style={styles.btnText}>✕ Clear</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.btn, styles.quitBtn]}
@@ -359,5 +419,6 @@ const styles = StyleSheet.create({
   btn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginHorizontal: 4 },
   clearBtn: { backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#334155' },
   quitBtn: { backgroundColor: '#ef4444' },
+  hintBtn: { backgroundColor: '#7c2d12', borderWidth: 1, borderColor: '#fb923c' },
   btnText: { color: '#fff', fontWeight: 'bold' },
 });

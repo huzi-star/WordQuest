@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { roundComplete } from '../utils/api';
-import { saveStats } from '../utils/storage';
+import { saveStats, logRound } from '../utils/storage';
 
 export default function RoundCompleteScreen({ navigation, route }) {
   const { playerStats, sessionStats, roundResult } = route.params;
@@ -27,6 +27,15 @@ export default function RoundCompleteScreen({ navigation, route }) {
       await saveStats({
         highScore: sessionStats.score,
         bestStreak: Math.max(sessionStats.bestStreak || 0, sessionStats.streak || 0),
+      });
+      await logRound({
+        category: roundResult.category || '',
+        wordsFound: roundResult.wordsFound,
+        totalWords: roundResult.totalWords,
+        timeSpent: roundResult.timeSpent || 0,
+        roundScore: roundResult.roundScore || 0,
+        perfect: roundResult.wordsFound === roundResult.totalWords,
+        hintsUsed: roundResult.hintsUsed || 0,
       });
       setLoading(false);
     })();

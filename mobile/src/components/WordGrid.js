@@ -1,12 +1,18 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, Dimensions, PanResponder, Animated } from 'react-native';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const GRID_PAD = 16;
-const CELL = Math.floor((SCREEN_W - GRID_PAD * 2) / 8) - 2;
-const CELL_WITH_MARGIN = CELL + 2; // cell + horizontal margin (1px each side)
+const SCREEN_W = Dimensions.get('window').width;
+const GRID_HPAD = 12;
 
-function Cell({ r, c, letter, sel, found, justFound, delay }) {
+function computeCell(gridSize) {
+  // Leave a little horizontal padding (12 each side). Each cell has 1px
+  // margin all round so total stride is CELL + 2.
+  const usable = SCREEN_W - GRID_HPAD * 2;
+  const cell = Math.floor(usable / gridSize) - 2;
+  return { CELL: Math.max(20, cell), CELL_WITH_MARGIN: Math.max(22, cell + 2) };
+}
+
+function Cell({ letter, sel, found, hinted, justFound, delay, size, fontSize }) {
   const scale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -19,11 +25,16 @@ function Cell({ r, c, letter, sel, found, justFound, delay }) {
     }
   }, [justFound, delay]);
 
-  const bg = sel ? '#22c55e' : found ? '#166534' : '#1e293b';
-  const color = sel ? '#000' : '#fff';
+  const bg = sel ? '#22c55e' : found ? '#166534' : hinted ? '#7c2d12' : '#1e293b';
+  const color = sel ? '#000' : hinted && !found ? '#fdba74' : '#fff';
   return (
-    <Animated.View style={[styles.cell, { backgroundColor: bg, transform: [{ scale }] }]}>
-      <Text style={[styles.letter, { color }]}>{letter}</Text>
+    <Animated.View
+      style={[
+        styles.cellBase,
+        { width: size, height: size, backgroundColor: bg, transform: [{ scale }] },
+      ]}
+    >
+      <Text style={[styles.letterBase, { color, fontSize }]}>{letter}</Text>
     </Animated.View>
   );
 }
@@ -35,14 +46,19 @@ export default function WordGrid({
   selectedCells = [],
   foundCells = [],
   justFoundCells = [],
+  hintedCells = [],
 }) {
+  const gridSize = grid.length || 8;
+  const { CELL, CELL_WITH_MARGIN } = useMemo(() => computeCell(gridSize), [gridSize]);
+  const fontSize = Math.max(13, Math.floor(CELL * 0.45));
+
   const gridRef = useRef(null);
   const originRef = useRef({ x: 0, y: 0 });
   const lastCellRef = useRef(null);
   const gestureCountRef = useRef(0);
 
   const propsRef = useRef({});
-  propsRef.current = { grid, onCellEnter, onSelectionEnd };
+  propsRef.current = { grid, onCellEnter, onSelectionEnd, CELL_WITH_MARGIN };
 
   const measure = () => {
     if (gridRef.current && gridRef.current.measure) {
@@ -57,11 +73,12 @@ export default function WordGrid({
   const pointToCell = (evt) => {
     const g = propsRef.current.grid;
     if (!g || !g.length) return null;
+    const stride = propsRef.current.CELL_WITH_MARGIN;
     const ne = evt.nativeEvent;
     const relX = ne.pageX - originRef.current.x;
     const relY = ne.pageY - originRef.current.y;
-    const c = Math.floor(relX / CELL_WITH_MARGIN);
-    const r = Math.floor(relY / CELL_WITH_MARGIN);
+    const c = Math.floor(relX / stride);
+    const r = Math.floor(relY / stride);
     if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return null;
     return { r, c, letter: g[r][c] };
   };
@@ -109,13 +126,14 @@ export default function WordGrid({
       clearTimeout(t1);
       clearTimeout(t2);
     };
-  }, []);
+  }, [gridSize]);
 
   const isSelected = (r, c) => selectedCells.some((s) => s.r === r && s.c === c);
   const isFound = (r, c) => foundCells.some((s) => s.r === r && s.c === c);
+  const isHinted = (r, c) => hintedCells.some((s) => s.r === r && s.c === c);
   const justFoundIndex = (r, c) => justFoundCells.findIndex((s) => s.r === r && s.c === c);
 
-  // Build path-line overlay segments between consecutive selected cells.
+  // Path-line segments between consecutive selected cells.
   const segments = [];
   for (let i = 1; i < selectedCells.length; i++) {
     const a = selectedCells[i - 1];
@@ -159,24 +177,25 @@ export default function WordGrid({
           {row.map((letter, c) => {
             const sel = isSelected(r, c);
             const found = isFound(r, c);
+            const hinted = isHinted(r, c);
             const jfIdx = justFoundIndex(r, c);
             return (
               <Cell
                 key={`${r}-${c}`}
-                r={r}
-                c={c}
                 letter={letter}
                 sel={sel}
                 found={found}
+                hinted={hinted}
                 justFound={jfIdx >= 0}
                 delay={jfIdx >= 0 ? jfIdx * 70 : 0}
+                size={CELL}
+                fontSize={fontSize}
               />
             );
           })}
         </View>
       ))}
 
-      {/* Path-line overlay (drawn behind cells via zIndex trick: render absolutely) */}
       {segments.map((seg) => (
         <View
           key={seg.key}
@@ -191,9 +210,7 @@ export default function WordGrid({
 const styles = StyleSheet.create({
   grid: { alignSelf: 'center', padding: 0, position: 'relative' },
   row: { flexDirection: 'row' },
-  cell: {
-    width: CELL,
-    height: CELL,
+  cellBase: {
     margin: 1,
     borderRadius: 6,
     alignItems: 'center',
@@ -201,7 +218,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#334155',
   },
-  letter: { fontSize: Math.max(14, CELL * 0.45), fontWeight: 'bold' },
+  letterBase: { fontWeight: 'bold' },
   line: {
     position: 'absolute',
     backgroundColor: 'rgba(250, 204, 21, 0.75)',
