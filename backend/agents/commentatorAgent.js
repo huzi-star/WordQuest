@@ -49,7 +49,7 @@ async function commentatorAgent({
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const triggerHint = {
       streak: `Player just hit a streak of ${streak}. Hype them up.`,
@@ -70,7 +70,7 @@ Return ONE short, energetic line (max 15 words). Mix Urdu + English casually
 
     const result = await Promise.race([
       model.generateContent(prompt),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000)),
     ]);
     const text = result.response.text().trim().replace(/^["']|["']$/g, '');
     if (!text || text.length > 140) return { comment: fallback };

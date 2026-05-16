@@ -65,36 +65,37 @@ async function chaalbaazChat({ history = [], message = '', playerStats = {} }) {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-    // Build conversation: system + last 6 turns + new user message.
-    const turns = (history || []).slice(-6).map(t => ({
-      role: t.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: String(t.text || '').slice(0, 400) }],
-    }));
-
-    const chat = model.startChat({
-      history: [
-        { role: 'user', parts: [{ text: SYSTEM_PERSONA }] },
-        { role: 'model', parts: [{ text: 'OK — main Chaalbaaz hun, ready to taunt!' }] },
-        ...turns,
-      ],
-      generationConfig: { maxOutputTokens: 120, temperature: 0.95 },
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: { maxOutputTokens: 100, temperature: 0.95 },
     });
 
+    // Single-shot generateContent is faster than multi-turn startChat on
+    // serverless cold starts. Compose the whole conversation into one prompt.
+    const turns = (history || []).slice(-6).map(t => {
+      const speaker = t.role === 'assistant' ? 'CHAALBAAZ' : 'PLAYER';
+      return `${speaker}: ${String(t.text || '').slice(0, 200)}`;
+    });
     const statContext = playerStats?.currentStreak
-      ? `(Player streak: ${playerStats.currentStreak}, avg words: ${playerStats.avgWordsFound || 0})`
+      ? ` [Player streak: ${playerStats.currentStreak}, avg words: ${(playerStats.avgWordsFound || 0).toFixed(1)}]`
       : '';
-    const userMsg = `${message}${statContext ? ` ${statContext}` : ''}`;
+
+    const prompt = `${SYSTEM_PERSONA}
+
+Conversation so far:
+${turns.join('\n')}
+PLAYER: ${message}${statContext}
+CHAALBAAZ:`;
 
     const result = await Promise.race([
-      chat.sendMessage(userMsg),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('chat timeout')), 8000)),
+      model.generateContent(prompt),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('chat timeout')), 22000)),
     ]);
-    const text = (result.response.text() || '').trim();
+    const text = (result.response.text() || '').trim().replace(/^["']|["']$/g, '');
     if (!text) return { reply: fallback };
     return { reply: text };
   } catch (err) {
+    console.warn('chaalbaazChat error:', err.message);
     return { reply: fallback };
   }
 }

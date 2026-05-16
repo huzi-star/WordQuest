@@ -55,7 +55,7 @@ async function coachAgent(stats) {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `You are a friendly personal AI coach for a Pakistani word puzzle game.
 The player just finished a session. Analyze and give personalized feedback.
@@ -84,7 +84,7 @@ Max 15 words per bullet.`;
 
     const result = await Promise.race([
       model.generateContent(prompt),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('coach timeout')), 7000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('coach timeout')), 22000)),
     ]);
     const text = result.response.text().trim();
     const cleaned = text.replace(/```json|```/g, '').trim();

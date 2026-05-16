@@ -55,7 +55,7 @@ async function tutorAgent({ word, category = '', funFact = '' }) {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `You are a friendly Pakistani trivia tutor.
 The player just found the word "${upper}" in the category "${category}".
@@ -69,7 +69,7 @@ Output ONLY the sentence, nothing else. No quotes, no labels.`;
 
     const result = await Promise.race([
       model.generateContent(prompt),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('tutor timeout')), 4500)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('tutor timeout')), 12000)),
     ]);
     const text = result.response.text().trim().replace(/^["']|["']$/g, '');
     if (!text || text.length > 200) throw new Error('bad output');
