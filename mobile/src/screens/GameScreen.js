@@ -104,27 +104,44 @@ export default function GameScreen({ navigation, route }) {
     return true;
   }
 
-  function onLetterPress(r, c, letter) {
-    const idx = selected.findIndex(s => s.r === r && s.c === c);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+
+  function onCellEnter(r, c, letter) {
+    const current = selectedRef.current;
+    const alreadyIdx = current.findIndex(s => s.r === r && s.c === c);
     let next;
-    if (idx >= 0) {
-      // tapping an already-selected cell deselects it
-      next = selected.filter((_, i) => i !== idx);
+    if (alreadyIdx >= 0) {
+      // cell already in selection — keep current, don't toggle (drag through revisit is no-op)
+      return;
+    }
+    const candidate = [...current, { r, c, letter }];
+    if (isValidLine(candidate)) {
+      next = candidate;
     } else {
-      const candidate = [...selected, { r, c, letter }];
-      if (isValidLine(candidate)) {
-        next = candidate;
-      } else {
-        // breaks the line — restart selection from this cell
-        next = [{ r, c, letter }];
-        showAgent('Line break — naya selection shuru');
-      }
+      // breaks the line — restart selection from this cell
+      next = [{ r, c, letter }];
     }
     setSelected(next);
+    selectedRef.current = next;
 
     const attempt = next.map(s => s.letter).join('');
     const target = wordList.find(w => w === attempt);
     if (target) attemptValidation(next);
+  }
+
+  function onSelectionEnd(wasDrag) {
+    const current = selectedRef.current;
+    if (!wasDrag || current.length < 2) return;
+    // Drag finished without an auto-validated match — try referee one more
+    // time (covers cases where attempt is a valid word length but referee
+    // hasn't been called yet), otherwise clear the failed drag.
+    const attempt = current.map(s => s.letter).join('');
+    if (wordList.includes(attempt)) {
+      attemptValidation(current);
+    } else {
+      clearSelection();
+    }
   }
 
   function goToRoundComplete(wordsFound, timeLeft, finalScore, finalStreak) {
@@ -195,7 +212,8 @@ export default function GameScreen({ navigation, route }) {
       <Animated.View style={{ transform: [{ translateX: shake }] }}>
         <WordGrid
           grid={level.grid}
-          onLetterPress={onLetterPress}
+          onCellEnter={onCellEnter}
+          onSelectionEnd={onSelectionEnd}
           selectedCells={selected}
           foundCells={foundCells}
         />
