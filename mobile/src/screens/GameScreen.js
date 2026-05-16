@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Vibration } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import WordGrid from '../components/WordGrid';
@@ -8,6 +8,7 @@ import AgentThinking from '../components/AgentThinking';
 import ScorePopup from '../components/ScorePopup';
 import Confetti from '../components/Confetti';
 import { validateWord, explainWord } from '../utils/api';
+import { playDing, initSound } from '../utils/sound';
 
 export default function GameScreen({ navigation, route }) {
   const { playerStats, sessionStats, difficulty, level } = route.params;
@@ -21,11 +22,16 @@ export default function GameScreen({ navigation, route }) {
   const [paused, setPaused] = useState(false);
   const [popups, setPopups] = useState([]); // { id, text, x, y, color }
   const [showConfetti, setShowConfetti] = useState(false);
+  const [justFoundCells, setJustFoundCells] = useState([]);
   const timeLeftRef = useRef(difficulty.timeLimit);
   const shake = useRef(new Animated.Value(0)).current;
   const popupIdRef = useRef(0);
 
   const wordList = useMemo(() => (level.words || []).map(w => w.toUpperCase()), [level.words]);
+
+  useEffect(() => {
+    initSound();
+  }, []);
 
   function showAgent(msg, durationMs = 2400) {
     setAgentMsg(msg);
@@ -71,6 +77,7 @@ export default function GameScreen({ navigation, route }) {
       foundWords,
       timeLeft: timeLeftRef.current,
       score,
+      streak,
     });
 
     if (!res?.ok) {
@@ -89,9 +96,16 @@ export default function GameScreen({ navigation, route }) {
       setScore(r.newScore);
       setStreak(s => s + 1);
       Vibration.vibrate(40);
+      playDing();
 
-      // Score popup near the centre of the screen.
-      spawnPopup(`+${r.pointsEarned}`, 180, 360, '#22c55e');
+      // Trigger the reveal-wave animation on the just-found word's cells.
+      setJustFoundCells(cellsForWord);
+      setTimeout(() => setJustFoundCells([]), 900);
+
+      // Score popup — show combo multiplier if active.
+      const mult = r.breakdown?.multiplier || 1;
+      const multTag = mult > 1 ? ` ⚡ x${mult}` : '';
+      spawnPopup(`+${r.pointsEarned}${multTag}`, 180, 360, mult >= 2 ? '#eab308' : '#22c55e');
 
       // Ask Gemini tutor for an educational note — show longer in agent bubble.
       explainWord({
@@ -234,7 +248,14 @@ export default function GameScreen({ navigation, route }) {
           onTick={t => { timeLeftRef.current = t; }}
           paused={paused}
         />
-        <Text style={styles.streakText}>🔥 {streak}</Text>
+        <View style={styles.streakWrap}>
+          <Text style={styles.streakText}>🔥 {streak}</Text>
+          {streak >= 2 ? (
+            <Text style={styles.comboText}>
+              ⚡ {streak >= 6 ? '3x' : streak >= 4 ? '2x' : '1.5x'}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.categoryRow}>
@@ -249,6 +270,7 @@ export default function GameScreen({ navigation, route }) {
           onSelectionEnd={onSelectionEnd}
           selectedCells={selected}
           foundCells={foundCells}
+          justFoundCells={justFoundCells}
         />
       </Animated.View>
 
@@ -282,6 +304,8 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1e293b', borderRadius: 12, padding: 12 },
   scoreText: { color: '#22c55e', fontSize: 18, fontWeight: 'bold' },
   streakText: { color: '#eab308', fontSize: 18, fontWeight: 'bold' },
+  streakWrap: { alignItems: 'flex-end' },
+  comboText: { color: '#f97316', fontSize: 11, fontWeight: '900', marginTop: 2 },
   categoryRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 10 },
   category: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   roundText: { color: '#94a3b8' },
