@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { saveStats } from '../utils/storage';
+import { getCoach } from '../utils/api';
 
 export default function GameOverScreen({ navigation, route }) {
   const { sessionStats = {} } = route.params || {};
@@ -15,19 +16,38 @@ export default function GameOverScreen({ navigation, route }) {
     history = [],
   } = sessionStats;
 
+  const totalRounds = Math.max(0, round - 1);
+  const avgWords = history.length ? history.reduce((a, h) => a + h.wordsFound, 0) / history.length : 0;
+  const avgTime = history.length ? history.reduce((a, h) => a + h.timeLeft, 0) / history.length : 0;
+
+  const [coach, setCoach] = useState(null);
+  const [coachLoading, setCoachLoading] = useState(true);
+
   useEffect(() => {
     saveStats({
       highScore: Math.max(highScore, score),
       bestStreak: Math.max(bestStreak, streak),
     });
+
+    const weakCategories = history
+      .filter(h => h.wordsFound < h.totalWords / 2)
+      .map(h => h.category)
+      .filter(Boolean);
+
+    getCoach({
+      totalScore: score,
+      rounds: totalRounds,
+      bestStreak: Math.max(bestStreak, streak),
+      badgesCount: badges.length,
+      avgWordsPerRound: avgWords,
+      avgTimeLeftPerRound: avgTime,
+      categoriesPlayed: Array.from(new Set(history.map(h => h.category).filter(Boolean))),
+      weakCategories: Array.from(new Set(weakCategories)),
+    }).then(res => {
+      setCoach(res?.ok ? res.result : null);
+      setCoachLoading(false);
+    });
   }, []);
-
-  const totalRounds = Math.max(0, round - 1);
-  const avgWords = history.length ? (history.reduce((a, h) => a + h.wordsFound, 0) / history.length).toFixed(1) : '0';
-  const avgTime = history.length ? (history.reduce((a, h) => a + h.timeLeft, 0) / history.length).toFixed(1) : '0';
-
-  const strength = Number(avgWords) >= 3 ? 'Words jaldi dhoondhne mein expert ho' : 'Tum dhairaj se khel rahe ho';
-  const improve = Number(avgTime) < 20 ? 'Speed pe kaam karo — time bonus zyada milega' : 'Mushkil categories try karo — vocabulary barhayegi';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -63,12 +83,49 @@ export default function GameOverScreen({ navigation, route }) {
           </View>
         ) : null}
 
-        <View style={styles.analysisCard}>
-          <Text style={styles.sectionLabel}>🤖 AI Performance Analysis</Text>
-          <Text style={styles.analysisLine}>Tumhari strengths: {strength}</Text>
-          <Text style={styles.analysisLine}>Improve karo: {improve}</Text>
-          <Text style={styles.analysisMeta}>Avg words/round: {avgWords} • Avg time left: {avgTime}s</Text>
+        <View style={styles.coachCard}>
+          <Text style={styles.sectionLabel}>🤖 AI Coach Analysis</Text>
+          {coachLoading ? (
+            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+              <ActivityIndicator color="#22c55e" />
+              <Text style={styles.coachLoadingText}>Gemini tumhari performance analyse kar raha hai...</Text>
+            </View>
+          ) : coach ? (
+            <View style={{ gap: 10 }}>
+              <Text style={styles.headline}>{coach.headline}</Text>
+
+              <Text style={styles.subhead}>💪 Tumhari Strengths:</Text>
+              {coach.strengths.map((s, i) => (
+                <Text key={`s${i}`} style={styles.bullet}>• {s}</Text>
+              ))}
+
+              <Text style={styles.subhead}>📈 Improve karo:</Text>
+              {coach.improvements.map((s, i) => (
+                <Text key={`i${i}`} style={styles.bullet}>• {s}</Text>
+              ))}
+
+              <Text style={styles.subhead}>🎯 Practice ye words:</Text>
+              <View style={styles.practiceRow}>
+                {coach.practice.map((w, i) => (
+                  <View key={`p${i}`} style={styles.practiceChip}>
+                    <Text style={styles.practiceText}>{w}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={styles.nextMove}>👉 {coach.nextMove}</Text>
+            </View>
+          ) : (
+            <Text style={styles.coachLoadingText}>Coach offline — phir try karna.</Text>
+          )}
         </View>
+
+        <TouchableOpacity
+          style={styles.chaalbaazBtn}
+          onPress={() => navigation.navigate('Chaalbaaz', { sessionStats })}
+        >
+          <Text style={styles.chaalbaazText}>😏 Chaalbaaz se baat karo</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.restartBtn}
@@ -88,7 +145,7 @@ export default function GameOverScreen({ navigation, route }) {
 
         <TouchableOpacity
           style={styles.homeBtn}
-          onPress={() => navigation.replace('Home', { highScore: Math.max(highScore, score), bestStreak: Math.max(bestStreak, streak) })}
+          onPress={() => navigation.replace('Home')}
         >
           <Text style={styles.homeText}>🏠 Home</Text>
         </TouchableOpacity>
@@ -111,9 +168,17 @@ const styles = StyleSheet.create({
   badgesCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 14, gap: 6 },
   sectionLabel: { color: '#22c55e', fontWeight: 'bold', fontSize: 16 },
   badgeLine: { color: '#fff' },
-  analysisCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 14, gap: 6 },
-  analysisLine: { color: '#fff' },
-  analysisMeta: { color: '#94a3b8', marginTop: 6 },
+  coachCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#22c55e' },
+  coachLoadingText: { color: '#94a3b8', marginTop: 6 },
+  headline: { color: '#fcd34d', fontSize: 15, fontWeight: 'bold' },
+  subhead: { color: '#22c55e', fontWeight: 'bold', marginTop: 6 },
+  bullet: { color: '#fff', marginLeft: 6 },
+  practiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  practiceChip: { backgroundColor: '#0f172a', borderColor: '#22c55e', borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
+  practiceText: { color: '#22c55e', fontWeight: 'bold', letterSpacing: 1 },
+  nextMove: { color: '#cbd5e1', marginTop: 6, fontStyle: 'italic' },
+  chaalbaazBtn: { backgroundColor: '#7f1d1d', borderColor: '#f97316', borderWidth: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  chaalbaazText: { color: '#fcd34d', fontWeight: 'bold', fontSize: 16 },
   restartBtn: { backgroundColor: '#22c55e', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   restartText: { color: '#0f172a', fontWeight: 'bold', fontSize: 18 },
   homeBtn: { backgroundColor: '#1e293b', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },

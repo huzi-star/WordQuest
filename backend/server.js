@@ -10,6 +10,9 @@ const levelGeneratorAgent = require('./agents/levelGeneratorAgent');
 const refereeAgent = require('./agents/refereeAgent');
 const rewardAgent = require('./agents/rewardAgent');
 const tutorAgent = require('./agents/tutorAgent');
+const commentatorAgent = require('./agents/commentatorAgent');
+const coachAgent = require('./agents/coachAgent');
+const chaalbaazAgent = require('./agents/chaalbaazAgent');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -55,7 +58,16 @@ function dedupeLevel(level) {
 app.post('/api/generate-level', async (req, res) => {
   try {
     const { playerStats = {} } = req.body || {};
-    const difficulty = difficultyAgent(playerStats);
+    let difficulty = difficultyAgent(playerStats);
+
+    // Chaalbaaz adversary: if the player is dominating, escalate.
+    const chaalbaazTune = await chaalbaazAgent({ mode: 'tune', playerStats });
+    let chaalbaazActive = false;
+    if (chaalbaazTune) {
+      difficulty = { ...difficulty, ...chaalbaazTune };
+      chaalbaazActive = true;
+    }
+
     const rawLevel = await levelGeneratorAgent({
       ...difficulty,
       lastCategory: playerStats.lastCategory || '',
@@ -65,6 +77,7 @@ app.post('/api/generate-level', async (req, res) => {
       ok: true,
       difficulty,
       level,
+      chaalbaazActive,
     });
   } catch (err) {
     console.error('generate-level error:', err);
@@ -88,6 +101,36 @@ app.post('/api/explain-word', async (req, res) => {
     res.json({ ok: true, result });
   } catch (err) {
     console.error('explain-word error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/commentary', async (req, res) => {
+  try {
+    const result = await commentatorAgent(req.body || {});
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error('commentary error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/coach', async (req, res) => {
+  try {
+    const result = await coachAgent(req.body || {});
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error('coach error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/chat-chaalbaaz', async (req, res) => {
+  try {
+    const result = await chaalbaazAgent({ ...(req.body || {}), mode: 'chat' });
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error('chaalbaaz error:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

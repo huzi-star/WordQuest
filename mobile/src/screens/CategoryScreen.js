@@ -50,11 +50,18 @@ export default function CategoryScreen({ navigation, route }) {
     );
   }
 
-  const { difficulty, level } = data;
+  const { difficulty, level, chaalbaazActive } = data;
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
+        {chaalbaazActive ? (
+          <View style={styles.chaalbaazBanner}>
+            <Text style={styles.chaalbaazTitle}>😏 Chaalbaaz Activated!</Text>
+            <Text style={styles.chaalbaazSub}>Tum bohot acha kar rahe ho — adversary agent ne difficulty barha di!</Text>
+          </View>
+        ) : null}
+
         <Text style={styles.heading}>🤖 AI ne choose kiya:</Text>
 
         <View style={styles.catCard}>
@@ -122,4 +129,7 @@ const styles = StyleSheet.create({
   funFactText: { color: '#fff', lineHeight: 20 },
   startBtn: { backgroundColor: '#22c55e', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   startText: { color: '#0f172a', fontSize: 18, fontWeight: 'bold' },
+  chaalbaazBanner: { backgroundColor: '#7f1d1d', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#f97316' },
+  chaalbaazTitle: { color: '#fcd34d', fontWeight: 'bold', fontSize: 16 },
+  chaalbaazSub: { color: '#fed7aa', marginTop: 4 },
 });

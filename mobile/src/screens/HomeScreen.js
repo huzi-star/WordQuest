@@ -67,6 +67,14 @@ export default function HomeScreen({ navigation }) {
         >
           <Text style={styles.playText}>▶ Game Shuru Karo</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.chaalbaazBtn}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('Chaalbaaz', { sessionStats: { streak: bestStreak } })}
+        >
+          <Text style={styles.chaalbaazText}>😏 Chaalbaaz se baat karo</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -84,4 +92,6 @@ const styles = StyleSheet.create({
   bottom: { marginBottom: 40 },
   playBtn: { backgroundColor: '#22c55e', paddingVertical: 18, borderRadius: 12, alignItems: 'center' },
   playText: { color: '#0f172a', fontSize: 20, fontWeight: 'bold' },
+  chaalbaazBtn: { backgroundColor: '#7f1d1d', borderColor: '#f97316', borderWidth: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 10 },
+  chaalbaazText: { color: '#fcd34d', fontSize: 16, fontWeight: 'bold' },
 });

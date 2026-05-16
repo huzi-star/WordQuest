@@ -7,7 +7,7 @@ import Timer from '../components/Timer';
 import AgentThinking from '../components/AgentThinking';
 import ScorePopup from '../components/ScorePopup';
 import Confetti from '../components/Confetti';
-import { validateWord, explainWord } from '../utils/api';
+import { validateWord, explainWord, getCommentary } from '../utils/api';
 import { playDing, initSound } from '../utils/sound';
 
 export default function GameScreen({ navigation, route }) {
@@ -32,6 +32,52 @@ export default function GameScreen({ navigation, route }) {
   useEffect(() => {
     initSound();
   }, []);
+
+  // Track which milestones we've already commented on this round.
+  const firedRef = useRef({ halfTime: false, lowTime: false, lastIdleAt: Date.now(), lastStreak: 0 });
+
+  function maybeFireCommentary(trigger) {
+    getCommentary({
+      trigger,
+      category: level.category,
+      wordsFound: foundWords.length,
+      totalWords: wordList.length,
+      timeLeft: timeLeftRef.current,
+      timeLimit: difficulty.timeLimit,
+      streak,
+    }).then((res) => {
+      if (res?.ok && res.result?.comment) {
+        showAgent(`🎙 ${res.result.comment}`, 3800);
+      }
+    });
+  }
+
+  function onTick(t) {
+    timeLeftRef.current = t;
+    const f = firedRef.current;
+    if (!f.halfTime && t <= Math.floor(difficulty.timeLimit / 2) && t > 15) {
+      f.halfTime = true;
+      maybeFireCommentary('half_time');
+    }
+    if (!f.lowTime && t === 15) {
+      f.lowTime = true;
+      maybeFireCommentary('low_time');
+    }
+    // Idle: no found word for 20s and selection empty.
+    if (
+      t > 0 &&
+      selected.length === 0 &&
+      Date.now() - f.lastIdleAt > 20000 &&
+      t > 20
+    ) {
+      f.lastIdleAt = Date.now();
+      maybeFireCommentary('idle');
+    }
+    if (streak > 0 && streak !== f.lastStreak && (streak === 3 || streak === 5 || streak === 7)) {
+      f.lastStreak = streak;
+      maybeFireCommentary('streak');
+    }
+  }
 
   function showAgent(msg, durationMs = 2400) {
     setAgentMsg(msg);
@@ -245,7 +291,7 @@ export default function GameScreen({ navigation, route }) {
         <Timer
           timeLimit={difficulty.timeLimit}
           onTimeUp={onTimeUp}
-          onTick={t => { timeLeftRef.current = t; }}
+          onTick={onTick}
           paused={paused}
         />
         <View style={styles.streakWrap}>

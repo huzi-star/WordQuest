@@ -53,6 +53,33 @@ export async function explainWord(payload) {
   }
 }
 
+export async function getCommentary(payload) {
+  try {
+    const { data } = await client.post('/api/commentary', payload);
+    return data;
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function getCoach(stats) {
+  try {
+    const { data } = await client.post('/api/coach', stats);
+    return data;
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function chatChaalbaaz(payload) {
+  try {
+    const { data } = await client.post('/api/chat-chaalbaaz', payload);
+    return data;
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
 export async function health() {
   try {
     const { data } = await client.get('/api/health');
