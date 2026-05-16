@@ -43,6 +43,16 @@ export async function roundComplete(payload) {
   }
 }
 
+export async function explainWord(payload) {
+  try {
+    const { data } = await client.post('/api/explain-word', payload);
+    return data;
+  } catch (err) {
+    console.warn('explainWord error:', err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
 export async function health() {
   try {
     const { data } = await client.get('/api/health');

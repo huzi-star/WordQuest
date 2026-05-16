@@ -1,14 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Text, StyleSheet } from 'react-native';
 
-export default function AgentThinking({ message, visible }) {
+export default function AgentThinking({ message, visible, duration = 2200 }) {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible && message) {
       Animated.sequence([
         Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: true }),
-        Animated.delay(2200),
+        Animated.delay(duration),
         Animated.timing(opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
       ]).start();
     }

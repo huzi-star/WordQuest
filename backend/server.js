@@ -9,6 +9,7 @@ const difficultyAgent = require('./agents/difficultyAgent');
 const levelGeneratorAgent = require('./agents/levelGeneratorAgent');
 const refereeAgent = require('./agents/refereeAgent');
 const rewardAgent = require('./agents/rewardAgent');
+const tutorAgent = require('./agents/tutorAgent');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -77,6 +78,16 @@ app.post('/api/validate-word', (req, res) => {
     res.json({ ok: true, result });
   } catch (err) {
     console.error('validate-word error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/explain-word', async (req, res) => {
+  try {
+    const result = await tutorAgent(req.body || {});
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error('explain-word error:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

@@ -33,6 +33,7 @@ logs for inspection during grading.
 | 🎨 **levelGeneratorAgent** | `backend/agents/levelGeneratorAgent.js` | **Google Gemini 1.5 Flash** | Picks one Pakistani-themed category (different from last round), generates N category-appropriate words, hides them in an 8×8 grid (horizontal + vertical), and writes a fun fact about the category. Falls back to a deterministic local generator if Gemini is offline. |
 | ⚖️ **refereeAgent** | `backend/agents/refereeAgent.js` | Pure logic | Validates each submitted word. Computes base points (`len × 10`) + time bonus (`floor(timeLeft/10) × 5`). Detects already-found words. Speaks in Urdu/English mix ("Zabardast! +X points"). |
 | 🏅 **rewardAgent** | `backend/agents/rewardAgent.js` | Pure logic | After each round, evaluates 5 badge conditions (Speed Demon, Perfect Round, On Fire, Pakistan Expert, Comeback Kid), updates the streak, and writes a forward-looking preview of what the AI will throw at the player next. |
+| 🎓 **tutorAgent** | `backend/agents/tutorAgent.js` | **Google Gemini 1.5 Flash** | When a word is found, generates a 1-sentence cultural/educational note about that word (Urdu/English mix, Pakistan-themed). Has a 4.5 s timeout + static fallback so gameplay never stalls. |
 
 ### Orchestration
 

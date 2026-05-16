@@ -1,11 +1,13 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Vibration } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import WordGrid from '../components/WordGrid';
 import WordList from '../components/WordList';
 import Timer from '../components/Timer';
 import AgentThinking from '../components/AgentThinking';
-import { validateWord } from '../utils/api';
+import ScorePopup from '../components/ScorePopup';
+import Confetti from '../components/Confetti';
+import { validateWord, explainWord } from '../utils/api';
 
 export default function GameScreen({ navigation, route }) {
   const { playerStats, sessionStats, difficulty, level } = route.params;
@@ -17,15 +19,26 @@ export default function GameScreen({ navigation, route }) {
   const [agentMsg, setAgentMsg] = useState('');
   const [agentVisible, setAgentVisible] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [popups, setPopups] = useState([]); // { id, text, x, y, color }
+  const [showConfetti, setShowConfetti] = useState(false);
   const timeLeftRef = useRef(difficulty.timeLimit);
   const shake = useRef(new Animated.Value(0)).current;
+  const popupIdRef = useRef(0);
 
   const wordList = useMemo(() => (level.words || []).map(w => w.toUpperCase()), [level.words]);
 
-  function showAgent(msg) {
+  function showAgent(msg, durationMs = 2400) {
     setAgentMsg(msg);
     setAgentVisible(true);
-    setTimeout(() => setAgentVisible(false), 2400);
+    setTimeout(() => setAgentVisible(false), durationMs);
+  }
+
+  function spawnPopup(text, x, y, color = '#22c55e') {
+    const id = ++popupIdRef.current;
+    setPopups((arr) => [...arr, { id, text, x, y, color }]);
+    setTimeout(() => {
+      setPopups((arr) => arr.filter((p) => p.id !== id));
+    }, 1500);
   }
 
   function shakeGrid() {
@@ -75,16 +88,36 @@ export default function GameScreen({ navigation, route }) {
       setFoundWords(newFoundWords);
       setScore(r.newScore);
       setStreak(s => s + 1);
-      showAgent(r.message);
+      Vibration.vibrate(40);
+
+      // Score popup near the centre of the screen.
+      spawnPopup(`+${r.pointsEarned}`, 180, 360, '#22c55e');
+
+      // Ask Gemini tutor for an educational note — show longer in agent bubble.
+      explainWord({
+        word: wordAttempt,
+        category: level.category,
+        funFact: level.funFact,
+      }).then((tutorRes) => {
+        if (tutorRes?.ok && tutorRes.result?.explanation) {
+          showAgent(`${r.message} • ${tutorRes.result.explanation}`, 5000);
+        } else {
+          showAgent(r.message);
+        }
+      });
+
       clearSelection();
 
       if (newFoundWords.length === wordList.length) {
         setPaused(true);
-        setTimeout(() => goToRoundComplete(newFoundWords.length, timeLeftRef.current, r.newScore, streak + 1), 700);
+        setShowConfetti(true);
+        Vibration.vibrate([0, 50, 80, 50, 80, 50]);
+        setTimeout(() => goToRoundComplete(newFoundWords.length, timeLeftRef.current, r.newScore, streak + 1), 1800);
       }
     } else {
       shakeGrid();
       setStreak(0);
+      Vibration.vibrate(120);
       showAgent(r.message);
       clearSelection();
     }
@@ -234,6 +267,12 @@ export default function GameScreen({ navigation, route }) {
       </View>
 
       <AgentThinking message={agentMsg} visible={agentVisible} />
+
+      {popups.map((p) => (
+        <ScorePopup key={p.id} text={p.text} x={p.x} y={p.y} color={p.color} />
+      ))}
+
+      <Confetti visible={showConfetti} onDone={() => setShowConfetti(false)} />
     </SafeAreaView>
   );
 }
