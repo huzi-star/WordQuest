@@ -40,7 +40,7 @@ export default function App() {
           }}
         >
           <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Category" component={CategoryScreen} options={{ title: 'AI Generating...' }} />
+          <Stack.Screen name="Category" component={CategoryScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Game" component={GameScreen} options={{ headerShown: false }} />
           <Stack.Screen name="RoundComplete" component={RoundCompleteScreen} options={{ headerShown: false }} />
           <Stack.Screen name="GameOver" component={GameOverScreen} options={{ headerShown: false }} />

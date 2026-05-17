@@ -155,23 +155,41 @@ export default function GameScreen({ navigation, route }) {
     return cells;
   }
 
-  async function attemptValidation(currentLetters) {
-    const wordAttempt = currentLetters.map(s => s.letter).join('');
-    const res = await validateWord({
-      word: wordAttempt,
-      wordList,
-      foundWords,
-      timeLeft: timeLeftRef.current,
-      score,
-      streak,
-    });
-
-    if (!res?.ok) {
-      showAgent('Backend nahi mila — selection clear');
-      clearSelection();
-      return;
+  // Pure-local validator — mirrors backend refereeAgent. Instant feedback
+  // (no network round-trip), so words validate in the same frame.
+  function localValidate(wordAttempt, timeLeftSec, streakValue, currentScore) {
+    const upper = String(wordAttempt || '').toUpperCase();
+    if (foundWords.includes(upper)) {
+      return {
+        isValid: false, alreadyFound: true, pointsEarned: 0, newScore: currentScore,
+        message: 'Yeh pehle mil gaya tha!',
+        breakdown: { basePoints: 0, timeBonus: 0, multiplier: 1 },
+      };
     }
-    const r = res.result;
+    if (!wordList.includes(upper)) {
+      return {
+        isValid: false, alreadyFound: false, pointsEarned: 0, newScore: currentScore,
+        message: 'Yeh list mein nahi',
+        breakdown: { basePoints: 0, timeBonus: 0, multiplier: 1 },
+      };
+    }
+    const effectiveStreak = streakValue + 1;
+    const multiplier =
+      effectiveStreak >= 6 ? 3 : effectiveStreak >= 4 ? 2 : effectiveStreak >= 2 ? 1.5 : 1;
+    const basePoints = upper.length * 10;
+    const timeBonus = Math.floor(timeLeftSec / 10) * 5;
+    const totalPoints = Math.floor((basePoints + timeBonus) * multiplier);
+    return {
+      isValid: true, alreadyFound: false, pointsEarned: totalPoints,
+      newScore: currentScore + totalPoints,
+      message: `Zabardast! +${totalPoints} points`,
+      breakdown: { basePoints, timeBonus, multiplier, effectiveStreak },
+    };
+  }
+
+  function attemptValidation(currentLetters) {
+    const wordAttempt = currentLetters.map(s => s.letter).join('');
+    const r = localValidate(wordAttempt, timeLeftRef.current, streak, score);
 
     if (r.isValid) {
       const cellsForWord = findWordPositionCells(wordAttempt);
