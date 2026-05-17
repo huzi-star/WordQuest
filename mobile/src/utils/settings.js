@@ -7,7 +7,7 @@ const KEY = 'wordquest:settings:v1';
 export const DEFAULTS = {
   sound: true,
   vibration: true,
-  language: 'urdu',          // 'urdu' (Roman) or 'english'
+  language: 'english',       // default = English. 'urdu' (Roman) also available.
   theme: 'green',            // 'green' | 'gold' | 'purple' | 'neon'
   hasSeenOnboarding: false,
 };

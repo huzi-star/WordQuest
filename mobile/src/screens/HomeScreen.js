@@ -105,41 +105,23 @@ export default function HomeScreen({ navigation }) {
             </View>
           </Animated.View>
 
-          {/* Levels grid */}
-          <Text style={styles.sectionTitle}>{t('levels_title')}</Text>
-          <Text style={styles.sectionSub}>{t('levels_sub')}</Text>
-          <View style={styles.levelsGrid}>
-            {Array.from({ length: TOTAL_LEVELS }).map((_, i) => {
-              const n = i + 1;
-              const isUnlocked = n <= stats.maxUnlockedLevel;
-              const isCompleted = stats.completedLevels.includes(n);
-              const tier = n <= 5 ? 'easy' : n <= 10 ? 'medium' : 'hard';
-              const tierColor = tier === 'easy' ? accent : tier === 'medium' ? gold : '#ef4444';
-              return (
-                <TouchableOpacity
-                  key={n}
-                  activeOpacity={isUnlocked ? 0.85 : 1}
-                  onPress={() => startLevel(n)}
-                  disabled={!isUnlocked}
-                  style={[
-                    styles.levelTile,
-                    {
-                      backgroundColor: isUnlocked ? theme.card : 'rgba(15,23,42,0.6)',
-                      borderColor: isCompleted ? gold : isUnlocked ? tierColor : theme.border,
-                      shadowColor: isCompleted ? gold : isUnlocked ? tierColor : 'transparent',
-                      shadowOpacity: isUnlocked ? 0.3 : 0,
-                    },
-                  ]}
-                >
-                  {isCompleted ? <Text style={[styles.tileBadge, { color: gold }]}>★</Text> : null}
-                  <Text style={[styles.tileNum, { color: isUnlocked ? '#fff' : '#475569' }]}>{n}</Text>
-                  <Text style={[styles.tileTier, { color: isUnlocked ? tierColor : '#475569' }]}>
-                    {isUnlocked ? (tier === 'easy' ? 'EASY' : tier === 'medium' ? 'MED' : 'HARD') : '🔒'}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {/* Levels card */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate('Levels')}
+            style={[styles.levelsCard, { backgroundColor: theme.card, borderColor: accent, shadowColor: accent }]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.levelsCardTitle, { color: accent }]}>{t('levels_title')}</Text>
+              <Text style={styles.levelsCardSub}>{t('levels_sub')}</Text>
+              <Text style={styles.levelsCardMeta}>
+                {stats.maxUnlockedLevel} / {TOTAL_LEVELS} unlocked · {stats.completedLevels.length} completed
+              </Text>
+            </View>
+            <View style={[styles.levelsCardBadge, { backgroundColor: accent }]}>
+              <Text style={[styles.levelsCardBadgeText, { color: theme.bg }]}>1-15</Text>
+            </View>
+          </TouchableOpacity>
 
           {/* Primary actions */}
           <View style={styles.actionsWrap}>
@@ -212,21 +194,18 @@ const styles = StyleSheet.create({
   statLabel: { color: '#94a3b8', fontSize: 9, fontWeight: '700', letterSpacing: 1, marginTop: 2 },
   statValue: { fontSize: 24, fontWeight: '900', marginTop: 2 },
 
-  sectionTitle: { color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 2, marginTop: 18 },
-  sectionSub: { color: '#94a3b8', fontSize: 11, marginTop: 2, marginBottom: 10 },
-
-  levelsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  levelTile: {
-    width: '18.5%',
-    aspectRatio: 1,
-    borderRadius: 12, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
-    shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+  levelsCard: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 16, borderRadius: 18, borderWidth: 1,
+    marginTop: 14,
+    shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  tileNum: { fontSize: 18, fontWeight: '900' },
-  tileTier: { fontSize: 8, fontWeight: '900', letterSpacing: 1, marginTop: 2 },
-  tileBadge: { position: 'absolute', top: 4, right: 6, fontSize: 12 },
+  levelsCardTitle: { fontSize: 18, fontWeight: '900', letterSpacing: 1 },
+  levelsCardSub: { color: '#94a3b8', fontSize: 11, marginTop: 2 },
+  levelsCardMeta: { color: '#cbd5e1', fontSize: 11, marginTop: 6, fontWeight: '700' },
+  levelsCardBadge: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  levelsCardBadgeText: { fontWeight: '900', fontSize: 16, letterSpacing: 1 },
 
   actionsWrap: { gap: 10, marginTop: 18 },
   playBtn: {

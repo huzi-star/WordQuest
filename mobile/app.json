@@ -2,7 +2,7 @@
   "expo": {
     "name": "WordQuest",
     "slug": "wordquest-pakistan",
-    "version": "1.7.0",
+    "version": "1.7.1",
     "orientation": "portrait",
     "backgroundColor": "#0f172a",
     "userInterfaceStyle": "dark",
@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.wordquest.pakistan",
-      "versionCode": 13,
+      "versionCode": 14,
       "icon": "./app-logo.jpeg",
       "adaptiveIcon": {
         "foregroundImage": "./app-logo.jpeg",
