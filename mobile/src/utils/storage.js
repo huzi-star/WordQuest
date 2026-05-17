@@ -8,14 +8,17 @@ const DEFAULTS = {
   totalGamesPlayed: 0,
   totalRoundsPlayed: 0,
   totalWordsFound: 0,
-  totalTimeSpent: 0,         // seconds
+  totalTimeSpent: 0,
   totalScoreEver: 0,
   perfectRounds: 0,
   hintsUsed: 0,
-  categoryStats: {},         // { [name]: { played, wordsFound, totalWords, perfectCount } }
-  recentScores: [],          // last 20 round scores
-  activeDays: {},            // { 'YYYY-MM-DD': true }
-  achievements: [],          // unlocked achievement ids
+  categoryStats: {},
+  recentScores: [],
+  activeDays: {},
+  achievements: [],
+  // Levels progression: 15 levels, level 1 is unlocked by default.
+  maxUnlockedLevel: 1,
+  completedLevels: [],
 };
 
 function todayKey() {
@@ -108,9 +111,21 @@ export async function logGameOver({ finalScore = 0, finalStreak = 0 }) {
 }
 
 export async function resetStats() {
+  try { await AsyncStorage.removeItem(KEY); } catch {}
+}
+
+// Mark a level as completed and unlock the next one (up to 15).
+export async function completeLevel(levelNumber) {
   try {
-    await AsyncStorage.removeItem(KEY);
-  } catch (err) {
-    // ignore
+    const current = await loadStats();
+    const next = { ...current };
+    const set = new Set(current.completedLevels || []);
+    set.add(levelNumber);
+    next.completedLevels = Array.from(set);
+    next.maxUnlockedLevel = Math.min(15, Math.max(current.maxUnlockedLevel || 1, levelNumber + 1));
+    await AsyncStorage.setItem(KEY, JSON.stringify(next));
+    return next;
+  } catch {
+    return null;
   }
 }

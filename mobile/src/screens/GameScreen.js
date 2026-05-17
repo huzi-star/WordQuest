@@ -13,7 +13,7 @@ import { useSettings } from '../utils/settings';
 
 export default function GameScreen({ navigation, route }) {
   const { settings } = useSettings();
-  const { playerStats, sessionStats, difficulty, level } = route.params;
+  const { playerStats, sessionStats, difficulty, level, levelNumber = 0 } = route.params;
   const [selected, setSelected] = useState([]); // [{r,c,letter}]
   const [foundCells, setFoundCells] = useState([]);
   const [foundWords, setFoundWords] = useState([]);
@@ -389,6 +389,7 @@ export default function GameScreen({ navigation, route }) {
         category: level.category,
         hintsUsed: hintsUsedThisRound,
         timeSpent: Math.max(0, difficulty.timeLimit - timeLeft),
+        levelNumber,
       },
     });
   }

@@ -1,29 +1,23 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Animated, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { loadStats } from '../utils/storage';
 import { useSettings } from '../utils/settings';
+import { useTheme } from '../utils/theme';
 import AnimatedNumber from '../components/AnimatedNumber';
 
-const INITIAL_STATS = {
-  roundsPlayed: 0,
-  avgWordsFound: 0,
-  avgTimeLeft: 0,
-  currentStreak: 0,
-  lastCategory: '',
-};
+const TOTAL_LEVELS = 15;
 
 export default function HomeScreen({ navigation }) {
   const { t } = useSettings();
+  const theme = useTheme();
   const [stats, setStats] = useState({
-    highScore: 0,
-    bestStreak: 0,
-    totalRoundsPlayed: 0,
-    perfectRounds: 0,
+    highScore: 0, bestStreak: 0,
+    totalRoundsPlayed: 0, perfectRounds: 0,
+    maxUnlockedLevel: 1, completedLevels: [],
   });
 
-  // Logo entry animation.
   const logoScale = useRef(new Animated.Value(0.6)).current;
   const fadeIn = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(1)).current;
@@ -52,189 +46,205 @@ export default function HomeScreen({ navigation }) {
           bestStreak: s.bestStreak || 0,
           totalRoundsPlayed: s.totalRoundsPlayed || 0,
           perfectRounds: s.perfectRounds || 0,
+          maxUnlockedLevel: s.maxUnlockedLevel || 1,
+          completedLevels: s.completedLevels || [],
         });
       })();
       return () => { cancelled = true; };
     }, [])
   );
 
-  function startGame() {
+  function startAdaptive() {
     navigation.navigate('Category', {
-      playerStats: INITIAL_STATS,
-      sessionStats: {
-        score: 0, round: 1, streak: 0, badges: [], history: [],
-        highScore: stats.highScore, bestStreak: stats.bestStreak,
-      },
+      playerStats: { roundsPlayed: 0, avgWordsFound: 0, avgTimeLeft: 0, currentStreak: 0, lastCategory: '' },
+      sessionStats: { score: 0, round: 1, streak: 0, badges: [], history: [], highScore: stats.highScore, bestStreak: stats.bestStreak },
     });
   }
 
+  function startLevel(n) {
+    if (n > stats.maxUnlockedLevel) return;
+    navigation.navigate('Category', {
+      playerStats: { roundsPlayed: 0, avgWordsFound: 0, avgTimeLeft: 0, currentStreak: 0, lastCategory: '' },
+      sessionStats: { score: 0, round: 1, streak: 0, badges: [], history: [], highScore: stats.highScore, bestStreak: stats.bestStreak, levelNumber: n },
+      levelNumber: n,
+    });
+  }
+
+  const accent = theme.accent;
+  const gold = theme.gold;
+
   return (
-    <View style={styles.container}>
-      {/* Decorative glow blobs */}
-      <View style={[styles.blob, styles.blobTopRight]} />
-      <View style={[styles.blob, styles.blobBottomLeft]} />
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <View style={[styles.blob, { backgroundColor: accent, top: -120, right: -100, opacity: 0.18 }]} />
+      <View style={[styles.blob, { backgroundColor: theme.accent2, bottom: -140, left: -120, opacity: 0.16 }]} />
 
       <SafeAreaView style={{ flex: 1 }}>
-        <Animated.View style={[styles.heroWrap, { opacity: fadeIn }]}>
-          <Animated.View style={[styles.logoCircle, { transform: [{ scale: logoScale }] }]}>
-            <Animated.Image
-              source={require('../../app-logo.jpeg')}
-              style={[styles.logo, { transform: [{ scale: pulse }] }]}
-            />
-          </Animated.View>
-          <Text style={styles.brand}>WordQuest</Text>
-          <View style={styles.tagPill}>
-            <Text style={styles.tag}>AI POWERED · PAKISTAN THEMED</Text>
-          </View>
-        </Animated.View>
-
-        <Animated.View style={[styles.statsRow, { opacity: fadeIn }]}>
-          <View style={styles.statCard}>
-            <Text style={styles.statIcon}>🏆</Text>
-            <Text style={styles.statLabel}>{t('high_score')}</Text>
-            <AnimatedNumber value={stats.highScore} style={styles.statValue} />
-          </View>
-          <View style={[styles.statCard, styles.statCardOrange]}>
-            <Text style={styles.statIcon}>🔥</Text>
-            <Text style={styles.statLabel}>{t('best_streak')}</Text>
-            <AnimatedNumber value={stats.bestStreak} style={[styles.statValue, { color: '#f97316' }]} />
-          </View>
-        </Animated.View>
-
-        <Animated.View style={[styles.miniRow, { opacity: fadeIn }]}>
-          <View style={styles.miniTile}>
-            <Text style={styles.miniLabel}>Rounds</Text>
-            <Text style={styles.miniValue}>{stats.totalRoundsPlayed}</Text>
-          </View>
-          <View style={styles.miniDivider} />
-          <View style={styles.miniTile}>
-            <Text style={styles.miniLabel}>Perfect</Text>
-            <Text style={styles.miniValue}>{stats.perfectRounds}</Text>
-          </View>
-          <View style={styles.miniDivider} />
-          <View style={styles.miniTile}>
-            <Text style={styles.miniLabel}>Agents</Text>
-            <Text style={[styles.miniValue, { color: '#a78bfa' }]}>8</Text>
-          </View>
-        </Animated.View>
-
-        <View style={styles.actionsWrap}>
-          <TouchableOpacity activeOpacity={0.9} onPress={startGame} style={styles.playBtn}>
-            <View style={styles.playBtnInner}>
-              <Text style={styles.playArrow}>▶</Text>
-              <Text style={styles.playText}>PLAY GAME</Text>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* Hero */}
+          <Animated.View style={[styles.heroWrap, { opacity: fadeIn }]}>
+            <Animated.View style={[styles.logoCircle, { transform: [{ scale: logoScale }], borderColor: accent, shadowColor: accent }]}>
+              <Animated.Image source={require('../../app-logo.jpeg')} style={[styles.logo, { transform: [{ scale: pulse }] }]} />
+            </Animated.View>
+            <Text style={styles.brand}>WordQuest</Text>
+            <View style={[styles.tagPill, { borderColor: accent, backgroundColor: `${accent}1a` }]}>
+              <Text style={[styles.tag, { color: accent }]}>{t('brand_tag')}</Text>
             </View>
-          </TouchableOpacity>
+          </Animated.View>
 
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => navigation.navigate('DailyChallenge')}
-            style={styles.dailyBtn}
-          >
-            <Text style={styles.dailyText}>🌟 Daily Challenge</Text>
-          </TouchableOpacity>
+          {/* Top stats */}
+          <Animated.View style={[styles.statsRow, { opacity: fadeIn }]}>
+            <View style={[styles.statCard, { borderColor: accent, shadowColor: accent, backgroundColor: theme.card }]}>
+              <Text style={styles.statIcon}>🏆</Text>
+              <Text style={styles.statLabel}>{t('high_score')}</Text>
+              <AnimatedNumber value={stats.highScore} style={[styles.statValue, { color: accent }]} />
+            </View>
+            <View style={[styles.statCard, { borderColor: '#f97316', shadowColor: '#f97316', backgroundColor: theme.card }]}>
+              <Text style={styles.statIcon}>🔥</Text>
+              <Text style={styles.statLabel}>{t('best_streak')}</Text>
+              <AnimatedNumber value={stats.bestStreak} style={[styles.statValue, { color: '#f97316' }]} />
+            </View>
+          </Animated.View>
 
-          <View style={styles.miniBtnRow}>
-            <TouchableOpacity
-              style={styles.miniBtn}
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('Stats')}
-            >
-              <Text style={styles.miniBtnText}>📊 Stats</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.miniBtn}
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('Settings')}
-            >
-              <Text style={styles.miniBtnText}>⚙ Settings</Text>
-            </TouchableOpacity>
+          {/* Levels grid */}
+          <Text style={styles.sectionTitle}>{t('levels_title')}</Text>
+          <Text style={styles.sectionSub}>{t('levels_sub')}</Text>
+          <View style={styles.levelsGrid}>
+            {Array.from({ length: TOTAL_LEVELS }).map((_, i) => {
+              const n = i + 1;
+              const isUnlocked = n <= stats.maxUnlockedLevel;
+              const isCompleted = stats.completedLevels.includes(n);
+              const tier = n <= 5 ? 'easy' : n <= 10 ? 'medium' : 'hard';
+              const tierColor = tier === 'easy' ? accent : tier === 'medium' ? gold : '#ef4444';
+              return (
+                <TouchableOpacity
+                  key={n}
+                  activeOpacity={isUnlocked ? 0.85 : 1}
+                  onPress={() => startLevel(n)}
+                  disabled={!isUnlocked}
+                  style={[
+                    styles.levelTile,
+                    {
+                      backgroundColor: isUnlocked ? theme.card : 'rgba(15,23,42,0.6)',
+                      borderColor: isCompleted ? gold : isUnlocked ? tierColor : theme.border,
+                      shadowColor: isCompleted ? gold : isUnlocked ? tierColor : 'transparent',
+                      shadowOpacity: isUnlocked ? 0.3 : 0,
+                    },
+                  ]}
+                >
+                  {isCompleted ? <Text style={[styles.tileBadge, { color: gold }]}>★</Text> : null}
+                  <Text style={[styles.tileNum, { color: isUnlocked ? '#fff' : '#475569' }]}>{n}</Text>
+                  <Text style={[styles.tileTier, { color: isUnlocked ? tierColor : '#475569' }]}>
+                    {isUnlocked ? (tier === 'easy' ? 'EASY' : tier === 'medium' ? 'MED' : 'HARD') : '🔒'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-        </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Powered by Google Gemini · Antigravity #AISeekho2026</Text>
-        </View>
+          {/* Primary actions */}
+          <View style={styles.actionsWrap}>
+            <TouchableOpacity activeOpacity={0.9} onPress={startAdaptive} style={[styles.playBtn, { backgroundColor: accent, shadowColor: accent }]}>
+              <Text style={[styles.playArrow, { color: theme.bg }]}>▶</Text>
+              <Text style={[styles.playText, { color: theme.bg }]}>{t('play_game')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('DailyChallenge')}
+              style={[styles.dailyBtn, { borderColor: gold, shadowColor: gold, backgroundColor: theme.card }]}
+            >
+              <Text style={[styles.dailyText, { color: gold }]}>🌟 {t('daily_challenge')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('Quiz')}
+              style={[styles.dailyBtn, { borderColor: theme.accent2, shadowColor: theme.accent2, backgroundColor: theme.card }]}
+            >
+              <Text style={[styles.dailyText, { color: theme.accent2 }]}>❓ {t('quiz_mode')}</Text>
+            </TouchableOpacity>
+
+            <View style={styles.miniBtnRow}>
+              <TouchableOpacity style={[styles.miniBtn, { borderColor: theme.border }]} activeOpacity={0.85} onPress={() => navigation.navigate('Stats')}>
+                <Text style={styles.miniBtnText}>📊 {t('stats')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.miniBtn, { borderColor: theme.border }]} activeOpacity={0.85} onPress={() => navigation.navigate('Settings')}>
+                <Text style={styles.miniBtnText}>⚙ {t('settings_btn')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Powered by Google Gemini · Antigravity #AISeekho2026</Text>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#070b14', overflow: 'hidden' },
-  blob: {
-    position: 'absolute',
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    opacity: 0.18,
-  },
-  blobTopRight: { backgroundColor: '#22c55e', top: -120, right: -100 },
-  blobBottomLeft: { backgroundColor: '#a78bfa', bottom: -140, left: -120 },
+  container: { flex: 1, overflow: 'hidden' },
+  scroll: { paddingHorizontal: 16, paddingBottom: 30 },
+  blob: { position: 'absolute', width: 320, height: 320, borderRadius: 160 },
 
-  heroWrap: { alignItems: 'center', marginTop: 28, paddingHorizontal: 20 },
+  heroWrap: { alignItems: 'center', marginTop: 18 },
   logoCircle: {
-    width: 120, height: 120, borderRadius: 60,
+    width: 100, height: 100, borderRadius: 50,
     backgroundColor: '#0b1220',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: '#22c55e',
-    shadowColor: '#22c55e', shadowOpacity: 0.5, shadowRadius: 22, shadowOffset: { width: 0, height: 0 },
-    elevation: 14,
-    overflow: 'hidden',
+    borderWidth: 2, shadowOpacity: 0.4, shadowRadius: 18, shadowOffset: { width: 0, height: 0 },
+    elevation: 10, overflow: 'hidden',
   },
-  logo: { width: 100, height: 100, borderRadius: 50 },
-  brand: { color: '#fff', fontSize: 36, fontWeight: '900', marginTop: 14, letterSpacing: 1 },
-  tagPill: {
-    marginTop: 8, paddingHorizontal: 12, paddingVertical: 5,
-    borderRadius: 20, borderWidth: 1, borderColor: '#22c55e',
-    backgroundColor: 'rgba(34,197,94,0.1)',
-  },
-  tag: { color: '#86efac', fontSize: 10, fontWeight: '700', letterSpacing: 1.5 },
+  logo: { width: 88, height: 88, borderRadius: 44 },
+  brand: { color: '#fff', fontSize: 30, fontWeight: '900', marginTop: 8, letterSpacing: 0.5 },
+  tagPill: { marginTop: 6, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16, borderWidth: 1 },
+  tag: { fontSize: 9, fontWeight: '700', letterSpacing: 1.5 },
 
-  statsRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, marginTop: 26 },
+  statsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   statCard: {
-    flex: 1,
-    backgroundColor: '#0e1726',
-    padding: 16, borderRadius: 18,
-    alignItems: 'center',
-    borderWidth: 1, borderColor: '#22c55e',
-    shadowColor: '#22c55e', shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
+    flex: 1, padding: 14, borderRadius: 16,
+    alignItems: 'center', borderWidth: 1,
+    shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  statCardOrange: { borderColor: '#f97316', shadowColor: '#f97316' },
-  statIcon: { fontSize: 26 },
-  statLabel: { color: '#94a3b8', fontSize: 10, fontWeight: '700', marginTop: 4, letterSpacing: 1 },
-  statValue: { color: '#22c55e', fontSize: 28, fontWeight: '900', marginTop: 4 },
+  statIcon: { fontSize: 22 },
+  statLabel: { color: '#94a3b8', fontSize: 9, fontWeight: '700', letterSpacing: 1, marginTop: 2 },
+  statValue: { fontSize: 24, fontWeight: '900', marginTop: 2 },
 
-  miniRow: {
-    flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginTop: 12,
-    backgroundColor: '#0e1726', borderRadius: 16, paddingVertical: 12,
-    borderWidth: 1, borderColor: '#1f2937',
+  sectionTitle: { color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 2, marginTop: 18 },
+  sectionSub: { color: '#94a3b8', fontSize: 11, marginTop: 2, marginBottom: 10 },
+
+  levelsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  levelTile: {
+    width: '18.5%',
+    aspectRatio: 1,
+    borderRadius: 12, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+    shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
-  miniTile: { flex: 1, alignItems: 'center' },
-  miniLabel: { color: '#64748b', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
-  miniValue: { color: '#fff', fontSize: 18, fontWeight: '900', marginTop: 2 },
-  miniDivider: { width: 1, height: 24, backgroundColor: '#1f2937' },
+  tileNum: { fontSize: 18, fontWeight: '900' },
+  tileTier: { fontSize: 8, fontWeight: '900', letterSpacing: 1, marginTop: 2 },
+  tileBadge: { position: 'absolute', top: 4, right: 6, fontSize: 12 },
 
-  actionsWrap: { paddingHorizontal: 20, marginTop: 'auto', marginBottom: 16, gap: 12 },
+  actionsWrap: { gap: 10, marginTop: 18 },
   playBtn: {
-    backgroundColor: '#22c55e', borderRadius: 22,
-    shadowColor: '#22c55e', shadowOpacity: 0.55, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    paddingVertical: 16, borderRadius: 20,
+    shadowOpacity: 0.5, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 12,
   },
-  playBtnInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, gap: 10 },
-  playArrow: { color: '#0f172a', fontSize: 18 },
-  playText: { color: '#0f172a', fontSize: 18, fontWeight: '900', letterSpacing: 2 },
-
+  playArrow: { fontSize: 17 },
+  playText: { fontSize: 17, fontWeight: '900', letterSpacing: 1.5 },
   dailyBtn: {
-    backgroundColor: '#0e1726',
-    borderColor: '#fcd34d', borderWidth: 1, paddingVertical: 14, borderRadius: 18, alignItems: 'center',
-    shadowColor: '#fcd34d', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6,
+    paddingVertical: 14, borderRadius: 18, alignItems: 'center', borderWidth: 1,
+    shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4,
   },
-  dailyText: { color: '#fcd34d', fontSize: 16, fontWeight: '800' },
+  dailyText: { fontSize: 15, fontWeight: '800' },
   miniBtnRow: { flexDirection: 'row', gap: 10 },
-  miniBtn: { flex: 1, backgroundColor: 'rgba(148,163,184,0.08)', borderColor: '#1f2937', borderWidth: 1, paddingVertical: 12, borderRadius: 14, alignItems: 'center' },
-  miniBtnText: { color: '#cbd5e1', fontSize: 14, fontWeight: '700' },
+  miniBtn: { flex: 1, backgroundColor: 'rgba(148,163,184,0.08)', borderWidth: 1, paddingVertical: 12, borderRadius: 14, alignItems: 'center' },
+  miniBtnText: { color: '#cbd5e1', fontSize: 13, fontWeight: '700' },
 
-  footer: { alignItems: 'center', paddingBottom: 10, paddingHorizontal: 20 },
+  footer: { alignItems: 'center', paddingTop: 20 },
   footerText: { color: '#475569', fontSize: 10, letterSpacing: 0.5 },
 });

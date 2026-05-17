@@ -49,6 +49,7 @@ function analyzeLocally(stats) {
 }
 
 async function coachAgent(stats) {
+  const language = (stats && stats.language) || 'urdu';
   const local = analyzeLocally(stats || {});
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === 'your_key_here') return local;
@@ -79,8 +80,9 @@ Return STRICTLY valid JSON with these keys (no markdown, no extra text):
   "nextMove": "one-sentence recommendation for the next session"
 }
 
-All copy in Roman Urdu / English mix, like a friendly Pakistani trainer.
-Max 15 words per bullet.`;
+${language === 'english'
+  ? 'All copy in clear, motivating English (15 words max per bullet).'
+  : 'All copy in Roman Urdu mixed with English (Pakistani trainer voice, 15 words max per bullet).'}`;
 
     const result = await Promise.race([
       model.generateContent(prompt),

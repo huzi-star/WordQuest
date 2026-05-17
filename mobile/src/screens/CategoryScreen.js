@@ -85,7 +85,7 @@ function ErrorState({ message, onRetry }) {
 }
 
 export default function CategoryScreen({ navigation, route }) {
-  const { playerStats, sessionStats } = route.params;
+  const { playerStats, sessionStats, levelNumber = 0 } = route.params;
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -97,7 +97,7 @@ export default function CategoryScreen({ navigation, route }) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const res = await generateLevel(playerStats);
+      const res = await generateLevel(playerStats, { levelNumber });
       if (cancelled) return;
       if (!res || !res.ok) {
         setError(res?.error || 'AI ne response nahi diya. Backend check karo.');
@@ -192,7 +192,7 @@ export default function CategoryScreen({ navigation, route }) {
             style={[styles.startBtn, { shadowColor: dColor }]}
             onPress={() =>
               navigation.replace('Game', {
-                playerStats, sessionStats, difficulty, level,
+                playerStats, sessionStats, difficulty, level, levelNumber,
               })
             }
           >

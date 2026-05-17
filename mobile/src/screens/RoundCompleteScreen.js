@@ -5,9 +5,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { roundComplete } from '../utils/api';
-import { saveStats, logRound } from '../utils/storage';
+import { saveStats, logRound, completeLevel } from '../utils/storage';
+import { useSettings } from '../utils/settings';
 
 export default function RoundCompleteScreen({ navigation, route }) {
+  const { t } = useSettings();
   const { playerStats, sessionStats, roundResult, level } = route.params;
   const [loading, setLoading] = useState(true);
   const [reward, setReward] = useState(null);
@@ -54,6 +56,11 @@ export default function RoundCompleteScreen({ navigation, route }) {
         perfect: roundResult.wordsFound === roundResult.totalWords,
         hintsUsed: roundResult.hintsUsed || 0,
       });
+      // If this was a numbered level (1-15) and the player completed it,
+      // unlock the next level.
+      if (roundResult.levelNumber > 0 && roundResult.wordsFound === roundResult.totalWords) {
+        await completeLevel(roundResult.levelNumber);
+      }
       setLoading(false);
     })();
   }, []);

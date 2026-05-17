@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings } from '../utils/settings';
+import { useTheme, THEMES } from '../utils/theme';
 import { resetStats } from '../utils/storage';
 
 function Row({ icon, title, subtitle, right }) {
@@ -19,25 +20,26 @@ function Row({ icon, title, subtitle, right }) {
 
 export default function SettingsScreen({ navigation }) {
   const { settings, setSetting, t } = useSettings();
+  const theme = useTheme();
 
   function confirmReset() {
     Alert.alert(
-      'Reset all stats?',
-      'Tumhare saare scores, badges, streak, aur category mastery zero ho jayenge. Yeh undo nahi ho sakta.',
+      t('reset_confirm_title'),
+      t('reset_confirm_msg'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Reset',
+          text: t('reset_stats'),
           style: 'destructive',
-          onPress: async () => { await resetStats(); Alert.alert('Done', 'Saari stats reset ho gayi.'); },
+          onPress: async () => { await resetStats(); Alert.alert(t('done'), ''); },
         },
       ],
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={[styles.blob, { backgroundColor: '#22c55e', top: -100, right: -80 }]} />
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <View style={[styles.blob, { backgroundColor: theme.accent, top: -100, right: -80 }]} />
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.header}>
@@ -45,22 +47,22 @@ export default function SettingsScreen({ navigation }) {
               <Text style={styles.backIcon}>←</Text>
             </TouchableOpacity>
             <View>
-              <Text style={styles.title}>⚙ Settings</Text>
-              <Text style={styles.subtitle}>App ki har cheez control karo</Text>
+              <Text style={styles.title}>⚙ {t('settings_title')}</Text>
+              <Text style={styles.subtitle}>{t('settings_sub')}</Text>
             </View>
           </View>
 
-          <Text style={styles.section}>FEEDBACK</Text>
-          <View style={styles.card}>
+          <Text style={styles.section}>{t('feedback_section')}</Text>
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Row
               icon="🔊"
               title={t('sound_setting')}
-              subtitle="Ding sound when word found"
+              subtitle={t('sound_setting_sub')}
               right={
                 <Switch
                   value={settings.sound}
                   onValueChange={(v) => setSetting('sound', v)}
-                  trackColor={{ false: '#334155', true: '#22c55e' }}
+                  trackColor={{ false: '#334155', true: theme.accent }}
                   thumbColor="#fff"
                 />
               }
@@ -69,62 +71,90 @@ export default function SettingsScreen({ navigation }) {
             <Row
               icon="📳"
               title={t('vibration_setting')}
-              subtitle="Haptic feedback on touch + word"
+              subtitle={t('vibration_setting_sub')}
               right={
                 <Switch
                   value={settings.vibration}
                   onValueChange={(v) => setSetting('vibration', v)}
-                  trackColor={{ false: '#334155', true: '#22c55e' }}
+                  trackColor={{ false: '#334155', true: theme.accent }}
                   thumbColor="#fff"
                 />
               }
             />
           </View>
 
-          <Text style={styles.section}>LANGUAGE</Text>
-          <View style={styles.card}>
+          <Text style={styles.section}>{t('language_section')}</Text>
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Row
               icon="🌐"
               title={t('language_setting')}
-              subtitle={settings.language === 'urdu' ? 'Roman Urdu + English mix' : 'Pure English UI'}
+              subtitle={t('language_setting_sub')}
               right={
                 <View style={styles.langToggle}>
                   <TouchableOpacity
                     onPress={() => setSetting('language', 'urdu')}
-                    style={[styles.langBtn, settings.language === 'urdu' && styles.langBtnActive]}
+                    style={[styles.langBtn, settings.language === 'urdu' && { backgroundColor: theme.accent }]}
                   >
-                    <Text style={[styles.langText, settings.language === 'urdu' && styles.langTextActive]}>اU</Text>
+                    <Text style={[styles.langText, settings.language === 'urdu' && { color: theme.bg }]}>اU</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => setSetting('language', 'english')}
-                    style={[styles.langBtn, settings.language === 'english' && styles.langBtnActive]}
+                    style={[styles.langBtn, settings.language === 'english' && { backgroundColor: theme.accent }]}
                   >
-                    <Text style={[styles.langText, settings.language === 'english' && styles.langTextActive]}>EN</Text>
+                    <Text style={[styles.langText, settings.language === 'english' && { color: theme.bg }]}>EN</Text>
                   </TouchableOpacity>
                 </View>
               }
             />
           </View>
 
-          <Text style={styles.section}>DATA</Text>
-          <View style={styles.card}>
+          <Text style={styles.section}>{t('theme_section')}</Text>
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Row
+              icon="🎨"
+              title={t('theme_setting')}
+              subtitle={t('theme_setting_sub')}
+            />
+            <View style={styles.divider} />
+            <View style={styles.themeRow}>
+              {Object.values(THEMES).map((thm) => (
+                <TouchableOpacity
+                  key={thm.id}
+                  onPress={() => setSetting('theme', thm.id)}
+                  style={[
+                    styles.themeChip,
+                    { backgroundColor: thm.card, borderColor: thm.accent },
+                    settings.theme === thm.id && { borderWidth: 3 },
+                  ]}
+                >
+                  <View style={[styles.themeSwatch, { backgroundColor: thm.accent }]} />
+                  <View style={[styles.themeSwatch, { backgroundColor: thm.accent2 }]} />
+                  <View style={[styles.themeSwatch, { backgroundColor: thm.gold }]} />
+                  <Text style={styles.themeName}>{thm.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <Text style={styles.section}>{t('data_section')}</Text>
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <TouchableOpacity onPress={confirmReset}>
               <Row
                 icon="🗑"
                 title={t('reset_stats')}
-                subtitle="Saari progress wapas zero ho jayegi"
+                subtitle={t('reset_stats_sub')}
                 right={<Text style={styles.dangerArrow}>→</Text>}
               />
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.section}>ABOUT</Text>
-          <View style={styles.card}>
-            <Row icon="🎮" title="WordQuest" subtitle="Version 1.6.0 · Powered by Google Gemini" />
+          <Text style={styles.section}>{t('about_section')}</Text>
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Row icon="🎮" title="WordQuest" subtitle="v1.7.0 · Powered by Google Gemini" />
             <View style={styles.divider} />
-            <Row icon="🏆" title="Built for #AISeekho2026" subtitle="Antigravity Hackathon — Agentic Game Quest" />
+            <Row icon="🏆" title="#AISeekho2026" subtitle="Antigravity Hackathon · Agentic Game Quest" />
             <View style={styles.divider} />
-            <Row icon="🤖" title="8 AI Agents" subtitle="Difficulty · Generator · Referee · Reward · Tutor · Commentator · Coach · Chaalbaaz" />
+            <Row icon="🤖" title="9 AI Agents" subtitle="Difficulty · Generator · Referee · Reward · Tutor · Commentator · Coach · Chaalbaaz · Quiz" />
           </View>
 
           <View style={{ height: 30 }} />
@@ -135,7 +165,7 @@ export default function SettingsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#070b14', overflow: 'hidden' },
+  container: { flex: 1, overflow: 'hidden' },
   blob: { position: 'absolute', width: 320, height: 320, borderRadius: 160, opacity: 0.1 },
   scroll: { padding: 18, gap: 8 },
 
@@ -146,7 +176,7 @@ const styles = StyleSheet.create({
   subtitle: { color: '#94a3b8', fontSize: 12 },
 
   section: { color: '#94a3b8', fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginTop: 14, marginBottom: 4 },
-  card: { backgroundColor: '#0e1726', borderRadius: 16, borderWidth: 1, borderColor: '#1f2937', overflow: 'hidden' },
+  card: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 14 },
   rowIcon: { fontSize: 22, width: 28, textAlign: 'center' },
   rowTitle: { color: '#fff', fontSize: 15, fontWeight: '700' },
@@ -155,9 +185,19 @@ const styles = StyleSheet.create({
 
   langToggle: { flexDirection: 'row', backgroundColor: '#0f172a', borderRadius: 10, padding: 2 },
   langBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
-  langBtnActive: { backgroundColor: '#22c55e' },
   langText: { color: '#94a3b8', fontWeight: '900', fontSize: 12 },
-  langTextActive: { color: '#0f172a' },
+
+  themeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 12 },
+  themeChip: {
+    flexBasis: '47%',
+    padding: 10, borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  themeSwatch: { width: 14, height: 14, borderRadius: 4 },
+  themeName: { color: '#fff', fontSize: 11, fontWeight: '700', marginLeft: 4 },
 
   dangerArrow: { color: '#ef4444', fontSize: 22, fontWeight: 'bold' },
 });
