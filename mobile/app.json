@@ -25,11 +25,11 @@
       "bundleIdentifier": "com.wordquest.pakistan",
       "icon": "./app-logo.jpeg"
     },
+    "owner": "game-puzzle",
     "extra": {
       "eas": {
-        "projectId": "ba48e1b9-5df1-460c-94b1-b6c2966ae4a6"
+        "projectId": "a0f8b85e-4d64-4b3e-b8d0-d47ec5011db5"
       }
-    },
-    "owner": "puzzle-mobile"
+    }
   }
 }
