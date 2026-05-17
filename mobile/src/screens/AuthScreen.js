@@ -1,0 +1,190 @@
+import React, { useState } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../utils/theme';
+import { useSettings } from '../utils/settings';
+import { signUp, signIn } from '../utils/supabase';
+
+export default function AuthScreen({ navigation }) {
+  const theme = useTheme();
+  const { t } = useSettings();
+  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    if (!email || !password) {
+      Alert.alert('Missing fields', 'Email aur password dono zaroori hain.');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert('Weak password', 'Password kam se kam 6 characters ka ho.');
+      return;
+    }
+    setBusy(true);
+    let res;
+    if (mode === 'signup') {
+      res = await signUp({ email: email.trim(), password, displayName: displayName.trim() || email.split('@')[0] });
+    } else {
+      res = await signIn({ email: email.trim(), password });
+    }
+    setBusy(false);
+    if (res?.error) {
+      Alert.alert(mode === 'signup' ? 'Sign-up failed' : 'Login failed', res.error);
+      return;
+    }
+    if (mode === 'signup') {
+      Alert.alert('Account created', 'Check your email for verification. You can play now — stats sync once verified.');
+    }
+    navigation.replace('Home');
+  }
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <View style={[styles.blob, { backgroundColor: theme.accent, top: -120, right: -100 }]} />
+      <View style={[styles.blob, { backgroundColor: theme.accent2, bottom: -140, left: -100, opacity: 0.13 }]} />
+
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ScrollView contentContainerStyle={styles.scroll}>
+            <View style={styles.heroWrap}>
+              <View style={[styles.logoCircle, { borderColor: theme.accent, shadowColor: theme.accent }]}>
+                <Text style={styles.heroEmoji}>🎮</Text>
+              </View>
+              <Text style={styles.brand}>WordQuest</Text>
+              <Text style={styles.tag}>
+                {mode === 'login' ? 'Welcome back' : 'Create your account'}
+              </Text>
+            </View>
+
+            <View style={[styles.modeToggle, { borderColor: theme.border }]}>
+              <TouchableOpacity
+                onPress={() => setMode('login')}
+                style={[styles.modeBtn, mode === 'login' && { backgroundColor: theme.accent }]}
+              >
+                <Text style={[styles.modeText, mode === 'login' && { color: theme.bg }]}>Login</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setMode('signup')}
+                style={[styles.modeBtn, mode === 'signup' && { backgroundColor: theme.accent }]}
+              >
+                <Text style={[styles.modeText, mode === 'signup' && { color: theme.bg }]}>Sign up</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              {mode === 'signup' ? (
+                <View style={styles.field}>
+                  <Text style={styles.label}>Display name</Text>
+                  <TextInput
+                    value={displayName}
+                    onChangeText={setDisplayName}
+                    placeholder="e.g. Babar"
+                    placeholderTextColor="#475569"
+                    style={[styles.input, { borderColor: theme.border }]}
+                    autoCapitalize="words"
+                  />
+                </View>
+              ) : null}
+              <View style={styles.field}>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="you@example.com"
+                  placeholderTextColor="#475569"
+                  style={[styles.input, { borderColor: theme.border }]}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Password</Text>
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Min 6 characters"
+                  placeholderTextColor="#475569"
+                  style={[styles.input, { borderColor: theme.border }]}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.submit, { backgroundColor: theme.accent }]}
+                onPress={submit}
+                disabled={busy}
+              >
+                {busy ? (
+                  <ActivityIndicator color={theme.bg} />
+                ) : (
+                  <Text style={[styles.submitText, { color: theme.bg }]}>
+                    {mode === 'signup' ? 'Create account' : 'Login'} →
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => navigation.replace('Home')}
+                style={{ marginTop: 14, alignItems: 'center' }}
+              >
+                <Text style={styles.guestText}>Continue without account (local-only)</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.legal}>
+              Stats sync across devices when logged in. Your password is encrypted by Supabase.
+            </Text>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, overflow: 'hidden' },
+  blob: { position: 'absolute', width: 320, height: 320, borderRadius: 160, opacity: 0.15 },
+  scroll: { padding: 20, gap: 18 },
+
+  heroWrap: { alignItems: 'center', marginTop: 24 },
+  logoCircle: {
+    width: 100, height: 100, borderRadius: 50,
+    backgroundColor: '#0b1220',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 0 },
+  },
+  heroEmoji: { fontSize: 50 },
+  brand: { color: '#fff', fontSize: 28, fontWeight: '900', marginTop: 8 },
+  tag: { color: '#94a3b8', marginTop: 4 },
+
+  modeToggle: { flexDirection: 'row', padding: 4, borderRadius: 14, borderWidth: 1 },
+  modeBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
+  modeText: { color: '#cbd5e1', fontWeight: '800' },
+
+  formCard: { padding: 16, borderRadius: 18, borderWidth: 1, gap: 12 },
+  field: { gap: 6 },
+  label: { color: '#94a3b8', fontSize: 11, fontWeight: '900', letterSpacing: 1.2 },
+  input: {
+    backgroundColor: 'rgba(15,23,42,0.7)',
+    borderWidth: 1, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12,
+    color: '#fff', fontSize: 14,
+  },
+
+  submit: { paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 6 },
+  submitText: { fontSize: 15, fontWeight: '900', letterSpacing: 1 },
+
+  guestText: { color: '#64748b', fontSize: 12 },
+  legal: { color: '#475569', fontSize: 11, textAlign: 'center', paddingHorizontal: 20 },
+});

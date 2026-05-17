@@ -17,6 +17,8 @@ import DailyChallengeScreen from './src/screens/DailyChallengeScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import QuizScreen from './src/screens/QuizScreen';
 import LevelsScreen from './src/screens/LevelsScreen';
+import AuthScreen from './src/screens/AuthScreen';
+import { AuthProvider } from './src/utils/auth';
 import AnimatedSplash from './src/components/AnimatedSplash';
 import { SettingsProvider, useSettings } from './src/utils/settings';
 import { ThemeProvider, THEMES } from './src/utils/theme';
@@ -61,6 +63,7 @@ function Navigator() {
       <Stack.Screen name="DailyChallenge" component={DailyChallengeScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }} />
       <Stack.Screen name="Quiz" component={QuizScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }} />
       <Stack.Screen name="Levels" component={LevelsScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }} />
+      <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }} />
     </Stack.Navigator>
   );
 }
@@ -70,7 +73,9 @@ function ThemedShell() {
   const themeId = settings.theme || 'green';
   return (
     <ThemeProvider themeId={themeId}>
-      <Navigator />
+      <AuthProvider>
+        <Navigator />
+      </AuthProvider>
     </ThemeProvider>
   );
 }

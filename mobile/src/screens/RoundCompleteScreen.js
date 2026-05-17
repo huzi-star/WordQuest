@@ -7,9 +7,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { roundComplete } from '../utils/api';
 import { saveStats, logRound, completeLevel } from '../utils/storage';
 import { useSettings } from '../utils/settings';
+import { useAuth } from '../utils/auth';
 
 export default function RoundCompleteScreen({ navigation, route }) {
   const { t } = useSettings();
+  const { syncUp } = useAuth();
   const { playerStats, sessionStats, roundResult, level } = route.params;
   const [loading, setLoading] = useState(true);
   const [reward, setReward] = useState(null);
@@ -61,6 +63,8 @@ export default function RoundCompleteScreen({ navigation, route }) {
       if (roundResult.levelNumber > 0 && roundResult.wordsFound === roundResult.totalWords) {
         await completeLevel(roundResult.levelNumber);
       }
+      // Push the latest local stats up to Supabase (no-op if not logged in).
+      syncUp().catch(() => {});
       setLoading(false);
     })();
   }, []);

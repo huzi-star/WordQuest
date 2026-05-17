@@ -256,18 +256,35 @@ export default function GameScreen({ navigation, route }) {
       const popupColor = hitsGold ? '#fcd34d' : isCombo ? '#fb923c' : mult >= 2 ? '#eab308' : '#22c55e';
       spawnPopup(`+${totalEarned}${tags.length ? ' · ' + tags.join(' · ') : ''}`, 180, 360, popupColor);
 
-      // Ask Gemini tutor for an educational note — show longer in agent bubble.
-      explainWord({
-        word: wordAttempt,
-        category: level.category,
-        funFact: level.funFact,
-      }).then((tutorRes) => {
-        if (tutorRes?.ok && tutorRes.result?.explanation) {
-          showAgent(`${r.message} • ${tutorRes.result.explanation}`, 5000);
-        } else {
-          showAgent(r.message);
-        }
-      });
+      // Every other word found, fire a commentary line (template fallback
+      // guarantees it shows even if Gemini is slow). Otherwise show the
+      // tutor explanation.
+      if (newFoundWords.length % 2 === 0) {
+        getCommentary({
+          trigger: 'word_found',
+          category: level.category,
+          wordsFound: newFoundWords.length,
+          totalWords: wordList.length,
+          timeLeft: timeLeftRef.current,
+          timeLimit: difficulty.timeLimit,
+          streak: streak + 1,
+        }).then((res) => {
+          const msg = res?.ok && res.result?.comment ? res.result.comment : r.message;
+          showAgent(`🎙 ${msg}`, 3600);
+        });
+      } else {
+        explainWord({
+          word: wordAttempt,
+          category: level.category,
+          funFact: level.funFact,
+        }).then((tutorRes) => {
+          if (tutorRes?.ok && tutorRes.result?.explanation) {
+            showAgent(`${r.message} • ${tutorRes.result.explanation}`, 5000);
+          } else {
+            showAgent(r.message);
+          }
+        });
+      }
 
       clearSelection();
 

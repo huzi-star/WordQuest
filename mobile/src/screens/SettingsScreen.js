@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings } from '../utils/settings';
 import { useTheme, THEMES } from '../utils/theme';
 import { resetStats } from '../utils/storage';
+import { useAuth } from '../utils/auth';
+import { signOut } from '../utils/supabase';
 
 function Row({ icon, title, subtitle, right }) {
   return (
@@ -21,6 +23,7 @@ function Row({ icon, title, subtitle, right }) {
 export default function SettingsScreen({ navigation }) {
   const { settings, setSetting, t } = useSettings();
   const theme = useTheme();
+  const { user, configured } = useAuth();
 
   function confirmReset() {
     Alert.alert(
@@ -50,6 +53,34 @@ export default function SettingsScreen({ navigation }) {
               <Text style={styles.title}>⚙ {t('settings_title')}</Text>
               <Text style={styles.subtitle}>{t('settings_sub')}</Text>
             </View>
+          </View>
+
+          <Text style={styles.section}>ACCOUNT</Text>
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            {!configured ? (
+              <Row icon="ℹ️" title="Supabase not configured" subtitle="Set SUPABASE_URL + key in supabase.js" />
+            ) : user ? (
+              <>
+                <Row
+                  icon="👤"
+                  title={user.user_metadata?.display_name || user.email || 'Player'}
+                  subtitle={user.email}
+                />
+                <View style={styles.divider} />
+                <TouchableOpacity onPress={async () => { await signOut(); }}>
+                  <Row icon="🚪" title="Sign out" subtitle="Clear cloud session" right={<Text style={styles.dangerArrow}>→</Text>} />
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity onPress={() => navigation.navigate('Auth')}>
+                <Row
+                  icon="🔐"
+                  title="Login or Sign up"
+                  subtitle="Stats sync across devices when logged in"
+                  right={<Text style={[styles.dangerArrow, { color: theme.accent }]}>→</Text>}
+                />
+              </TouchableOpacity>
+            )}
           </View>
 
           <Text style={styles.section}>{t('feedback_section')}</Text>
