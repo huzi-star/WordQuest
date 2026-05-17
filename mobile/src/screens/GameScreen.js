@@ -9,8 +9,10 @@ import ScorePopup from '../components/ScorePopup';
 import Confetti from '../components/Confetti';
 import { validateWord, explainWord, getCommentary } from '../utils/api';
 import { playDing, initSound } from '../utils/sound';
+import { useSettings } from '../utils/settings';
 
 export default function GameScreen({ navigation, route }) {
+  const { settings } = useSettings();
   const { playerStats, sessionStats, difficulty, level } = route.params;
   const [selected, setSelected] = useState([]); // [{r,c,letter}]
   const [foundCells, setFoundCells] = useState([]);
@@ -26,6 +28,15 @@ export default function GameScreen({ navigation, route }) {
   const [hintsLeft, setHintsLeft] = useState(3);
   const [revealedHints, setRevealedHints] = useState([]); // cells revealed by hint
   const [hintsUsedThisRound, setHintsUsedThisRound] = useState(0);
+  // Random 2 gold cells inside the grid. Words covering them get 2x.
+  const [goldCells] = useState(() => {
+    const size = (level.grid || []).length || 8;
+    const a = { r: Math.floor(Math.random() * size), c: Math.floor(Math.random() * size) };
+    let b = { r: Math.floor(Math.random() * size), c: Math.floor(Math.random() * size) };
+    if (b.r === a.r && b.c === a.c) b = { r: (a.r + 1) % size, c: (a.c + 1) % size };
+    return [a, b];
+  });
+  const lastWordAtRef = useRef(0);
   const timeLeftRef = useRef(difficulty.timeLimit);
   const shake = useRef(new Animated.Value(0)).current;
   const popupIdRef = useRef(0);
@@ -144,13 +155,20 @@ export default function GameScreen({ navigation, route }) {
     showAgent(`💡 Hint: "${pick.word}" — ${pick.direction === 'horizontal' ? 'horizontal' : 'vertical'} mein, row ${reveal.r + 1} col ${reveal.c + 1}`, 3200);
   }
 
+  const DIR_STEPS = {
+    horizontal: { dr: 0, dc: 1 },
+    vertical:   { dr: 1, dc: 0 },
+    diagonalDR: { dr: 1, dc: 1 },
+    diagonalDL: { dr: 1, dc: -1 },
+  };
+
   function findWordPositionCells(word) {
     const pos = (level.wordPositions || []).find(p => p.word.toUpperCase() === word);
     if (!pos) return [];
+    const { dr = 0, dc = 1 } = DIR_STEPS[pos.direction] || DIR_STEPS.horizontal;
     const cells = [];
     for (let i = 0; i < word.length; i++) {
-      if (pos.direction === 'horizontal') cells.push({ r: pos.startRow, c: pos.startCol + i });
-      else cells.push({ r: pos.startRow + i, c: pos.startCol });
+      cells.push({ r: pos.startRow + dr * i, c: pos.startCol + dc * i });
     }
     return cells;
   }
@@ -195,21 +213,48 @@ export default function GameScreen({ navigation, route }) {
       const cellsForWord = findWordPositionCells(wordAttempt);
       const mergedCells = [...foundCells, ...cellsForWord];
       const newFoundWords = [...foundWords, wordAttempt];
+
+      // Gold letter bonus: if the found word covers any gold cell, double the
+      // points earned for THIS word.
+      const hitsGold = cellsForWord.some(
+        (c) => goldCells.some((g) => g.r === c.r && g.c === c.c),
+      );
+      let bonusEarned = 0;
+      let goldDouble = 0;
+      if (hitsGold) {
+        goldDouble = r.pointsEarned; // adds another copy of base earnings
+        bonusEarned += goldDouble;
+      }
+      // Combo speed bonus: word within 5 s of previous word lands a +100.
+      const now = Date.now();
+      const sinceLast = now - lastWordAtRef.current;
+      const isCombo = lastWordAtRef.current > 0 && sinceLast < 5000;
+      if (isCombo) bonusEarned += 100;
+      lastWordAtRef.current = now;
+      const totalEarned = r.pointsEarned + bonusEarned;
+      const finalNewScore = score + totalEarned;
+
       setFoundCells(mergedCells);
       setFoundWords(newFoundWords);
-      setScore(r.newScore);
+      setScore(finalNewScore);
       setStreak(s => s + 1);
-      Vibration.vibrate(40);
-      playDing();
+      if (settings.vibration) Vibration.vibrate(40);
+      if (settings.sound) playDing();
+      r.pointsEarned = totalEarned;
+      r.newScore = finalNewScore;
 
       // Trigger the reveal-wave animation on the just-found word's cells.
       setJustFoundCells(cellsForWord);
       setTimeout(() => setJustFoundCells([]), 900);
 
-      // Score popup — show combo multiplier if active.
+      // Score popup with combo / gold tags.
+      const tags = [];
       const mult = r.breakdown?.multiplier || 1;
-      const multTag = mult > 1 ? ` ⚡ x${mult}` : '';
-      spawnPopup(`+${r.pointsEarned}${multTag}`, 180, 360, mult >= 2 ? '#eab308' : '#22c55e');
+      if (mult > 1) tags.push(`⚡ x${mult}`);
+      if (hitsGold) tags.push('✨ GOLD');
+      if (isCombo) tags.push('🔥 COMBO +100');
+      const popupColor = hitsGold ? '#fcd34d' : isCombo ? '#fb923c' : mult >= 2 ? '#eab308' : '#22c55e';
+      spawnPopup(`+${totalEarned}${tags.length ? ' · ' + tags.join(' · ') : ''}`, 180, 360, popupColor);
 
       // Ask Gemini tutor for an educational note — show longer in agent bubble.
       explainWord({
@@ -243,14 +288,16 @@ export default function GameScreen({ navigation, route }) {
 
   function isValidLine(cells) {
     if (cells.length <= 1) return true;
-    const sameRow = cells.every(x => x.r === cells[0].r);
-    const sameCol = cells.every(x => x.c === cells[0].c);
-    if (!sameRow && !sameCol) return false;
-    const axis = sameRow ? 'c' : 'r';
-    const vals = cells.map(x => x[axis]);
-    // require strictly ascending consecutive (matches L-R / T-B word placement)
-    for (let i = 1; i < vals.length; i++) {
-      if (vals[i] !== vals[i - 1] + 1) return false;
+    // Determine the direction from the first two cells, then check all cells
+    // follow the same step. Supports horizontal, vertical, and both diagonals.
+    const dr = cells[1].r - cells[0].r;
+    const dc = cells[1].c - cells[0].c;
+    if (Math.abs(dr) > 1 || Math.abs(dc) > 1) return false;
+    if (dr === 0 && dc === 0) return false;
+    for (let i = 1; i < cells.length; i++) {
+      const er = cells[i - 1].r + dr;
+      const ec = cells[i - 1].c + dc;
+      if (cells[i].r !== er || cells[i].c !== ec) return false;
     }
     return true;
   }
@@ -388,6 +435,7 @@ export default function GameScreen({ navigation, route }) {
           foundCells={foundCells}
           justFoundCells={justFoundCells}
           hintedCells={revealedHints}
+          goldCells={goldCells}
         />
       </Animated.View>
 

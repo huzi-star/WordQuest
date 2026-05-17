@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet, Image, Animated } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { loadStats } from '../utils/storage';
+import { useSettings } from '../utils/settings';
+import AnimatedNumber from '../components/AnimatedNumber';
 
 const INITIAL_STATS = {
   roundsPlayed: 0,
@@ -13,6 +15,7 @@ const INITIAL_STATS = {
 };
 
 export default function HomeScreen({ navigation }) {
+  const { t } = useSettings();
   const [stats, setStats] = useState({
     highScore: 0,
     bestStreak: 0,
@@ -88,13 +91,13 @@ export default function HomeScreen({ navigation }) {
         <Animated.View style={[styles.statsRow, { opacity: fadeIn }]}>
           <View style={styles.statCard}>
             <Text style={styles.statIcon}>🏆</Text>
-            <Text style={styles.statLabel}>HIGH SCORE</Text>
-            <Text style={styles.statValue}>{stats.highScore}</Text>
+            <Text style={styles.statLabel}>{t('high_score')}</Text>
+            <AnimatedNumber value={stats.highScore} style={styles.statValue} />
           </View>
           <View style={[styles.statCard, styles.statCardOrange]}>
             <Text style={styles.statIcon}>🔥</Text>
-            <Text style={styles.statLabel}>BEST STREAK</Text>
-            <Text style={[styles.statValue, { color: '#f97316' }]}>{stats.bestStreak}</Text>
+            <Text style={styles.statLabel}>{t('best_streak')}</Text>
+            <AnimatedNumber value={stats.bestStreak} style={[styles.statValue, { color: '#f97316' }]} />
           </View>
         </Animated.View>
 
@@ -125,12 +128,28 @@ export default function HomeScreen({ navigation }) {
 
           <TouchableOpacity
             activeOpacity={0.85}
-            onPress={() => navigation.navigate('Stats')}
-            style={styles.secondaryBtn}
+            onPress={() => navigation.navigate('DailyChallenge')}
+            style={styles.dailyBtn}
           >
-            <Text style={styles.secondaryEmoji}>📊</Text>
-            <Text style={styles.secondaryText}>My Stats Dashboard</Text>
+            <Text style={styles.dailyText}>🌟 Daily Challenge</Text>
           </TouchableOpacity>
+
+          <View style={styles.miniBtnRow}>
+            <TouchableOpacity
+              style={styles.miniBtn}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('Stats')}
+            >
+              <Text style={styles.miniBtnText}>📊 Stats</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.miniBtn}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('Settings')}
+            >
+              <Text style={styles.miniBtnText}>⚙ Settings</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.footer}>
@@ -206,14 +225,15 @@ const styles = StyleSheet.create({
   playArrow: { color: '#0f172a', fontSize: 18 },
   playText: { color: '#0f172a', fontSize: 18, fontWeight: '900', letterSpacing: 2 },
 
-  secondaryBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(34,197,94,0.08)', borderRadius: 18,
-    paddingVertical: 14, gap: 10,
-    borderWidth: 1, borderColor: '#22c55e',
+  dailyBtn: {
+    backgroundColor: '#0e1726',
+    borderColor: '#fcd34d', borderWidth: 1, paddingVertical: 14, borderRadius: 18, alignItems: 'center',
+    shadowColor: '#fcd34d', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6,
   },
-  secondaryEmoji: { fontSize: 18 },
-  secondaryText: { color: '#22c55e', fontSize: 15, fontWeight: '700', letterSpacing: 0.5 },
+  dailyText: { color: '#fcd34d', fontSize: 16, fontWeight: '800' },
+  miniBtnRow: { flexDirection: 'row', gap: 10 },
+  miniBtn: { flex: 1, backgroundColor: 'rgba(148,163,184,0.08)', borderColor: '#1f2937', borderWidth: 1, paddingVertical: 12, borderRadius: 14, alignItems: 'center' },
+  miniBtnText: { color: '#cbd5e1', fontSize: 14, fontWeight: '700' },
 
   footer: { alignItems: 'center', paddingBottom: 10, paddingHorizontal: 20 },
   footerText: { color: '#475569', fontSize: 10, letterSpacing: 0.5 },

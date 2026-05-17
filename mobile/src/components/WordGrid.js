@@ -12,9 +12,19 @@ function computeCell(gridSize) {
   return { CELL: Math.max(20, cell), CELL_WITH_MARGIN: Math.max(22, cell + 2) };
 }
 
-function Cell({ letter, sel, found, hinted, justFound, delay, size, fontSize }) {
-  const scale = useRef(new Animated.Value(1)).current;
+function Cell({ letter, sel, found, hinted, gold, justFound, delay, size, fontSize, popInDelay }) {
+  const scale = useRef(new Animated.Value(0.4)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
 
+  // Pop-in on mount with staggered delay (cinematic grid reveal).
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 280, delay: popInDelay, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, delay: popInDelay, useNativeDriver: true, friction: 5, tension: 110 }),
+    ]).start();
+  }, []);
+
+  // Found-word reveal wave animation.
   useEffect(() => {
     if (justFound) {
       Animated.sequence([
@@ -25,16 +35,33 @@ function Cell({ letter, sel, found, hinted, justFound, delay, size, fontSize }) 
     }
   }, [justFound, delay]);
 
-  const bg = sel ? '#22c55e' : found ? '#166534' : hinted ? '#7c2d12' : '#1e293b';
-  const color = sel ? '#000' : hinted && !found ? '#fdba74' : '#fff';
+  // Priority: selected > found > hinted > gold > normal.
+  const bg = sel
+    ? '#22c55e'
+    : found
+      ? '#166534'
+      : hinted
+        ? '#7c2d12'
+        : gold
+          ? 'rgba(252, 211, 77, 0.18)'
+          : '#1e293b';
+  const borderColor = gold && !found && !sel ? '#fcd34d' : '#334155';
+  const color = sel ? '#000' : hinted && !found ? '#fdba74' : gold && !found ? '#fcd34d' : '#fff';
+
   return (
     <Animated.View
       style={[
         styles.cellBase,
-        { width: size, height: size, backgroundColor: bg, transform: [{ scale }] },
+        {
+          width: size, height: size, backgroundColor: bg,
+          borderColor,
+          transform: [{ scale }],
+          opacity,
+        },
       ]}
     >
       <Text style={[styles.letterBase, { color, fontSize }]}>{letter}</Text>
+      {gold && !found && !sel ? <Text style={styles.goldBadge}>✦</Text> : null}
     </Animated.View>
   );
 }
@@ -47,6 +74,7 @@ export default function WordGrid({
   foundCells = [],
   justFoundCells = [],
   hintedCells = [],
+  goldCells = [],
 }) {
   const gridSize = grid.length || 8;
   const { CELL, CELL_WITH_MARGIN } = useMemo(() => computeCell(gridSize), [gridSize]);
@@ -131,37 +159,35 @@ export default function WordGrid({
   const isSelected = (r, c) => selectedCells.some((s) => s.r === r && s.c === c);
   const isFound = (r, c) => foundCells.some((s) => s.r === r && s.c === c);
   const isHinted = (r, c) => hintedCells.some((s) => s.r === r && s.c === c);
+  const isGold = (r, c) => goldCells.some((s) => s.r === r && s.c === c);
   const justFoundIndex = (r, c) => justFoundCells.findIndex((s) => s.r === r && s.c === c);
 
-  // Path-line segments between consecutive selected cells.
+  // Path-line segments between consecutive selected cells. Supports
+  // horizontal, vertical, and both diagonals.
   const segments = [];
   for (let i = 1; i < selectedCells.length; i++) {
     const a = selectedCells[i - 1];
     const b = selectedCells[i];
-    const horiz = a.r === b.r;
-    const startC = Math.min(a.c, b.c);
-    const startR = Math.min(a.r, b.r);
-    if (horiz) {
-      segments.push({
-        key: `h${i}`,
-        style: {
-          left: startC * CELL_WITH_MARGIN + CELL_WITH_MARGIN / 2,
-          top: a.r * CELL_WITH_MARGIN + CELL_WITH_MARGIN / 2 - 5,
-          width: CELL_WITH_MARGIN,
-          height: 10,
-        },
-      });
-    } else {
-      segments.push({
-        key: `v${i}`,
-        style: {
-          left: a.c * CELL_WITH_MARGIN + CELL_WITH_MARGIN / 2 - 5,
-          top: startR * CELL_WITH_MARGIN + CELL_WITH_MARGIN / 2,
-          width: 10,
-          height: CELL_WITH_MARGIN,
-        },
-      });
-    }
+    const aCx = a.c * CELL_WITH_MARGIN + CELL_WITH_MARGIN / 2;
+    const aCy = a.r * CELL_WITH_MARGIN + CELL_WITH_MARGIN / 2;
+    const bCx = b.c * CELL_WITH_MARGIN + CELL_WITH_MARGIN / 2;
+    const bCy = b.r * CELL_WITH_MARGIN + CELL_WITH_MARGIN / 2;
+    const midX = (aCx + bCx) / 2;
+    const midY = (aCy + bCy) / 2;
+    const dx = bCx - aCx;
+    const dy = bCy - aCy;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    segments.push({
+      key: `seg${i}`,
+      style: {
+        left: midX - length / 2,
+        top: midY - 5,
+        width: length,
+        height: 10,
+        transform: [{ rotate: `${angle}deg` }],
+      },
+    });
   }
 
   return (
@@ -178,7 +204,10 @@ export default function WordGrid({
             const sel = isSelected(r, c);
             const found = isFound(r, c);
             const hinted = isHinted(r, c);
+            const gold = isGold(r, c);
             const jfIdx = justFoundIndex(r, c);
+            // Staggered pop-in based on diagonal position for nice wave.
+            const popInDelay = (r + c) * 35;
             return (
               <Cell
                 key={`${r}-${c}`}
@@ -186,8 +215,10 @@ export default function WordGrid({
                 sel={sel}
                 found={found}
                 hinted={hinted}
+                gold={gold}
                 justFound={jfIdx >= 0}
                 delay={jfIdx >= 0 ? jfIdx * 70 : 0}
+                popInDelay={popInDelay}
                 size={CELL}
                 fontSize={fontSize}
               />
@@ -219,6 +250,7 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
   },
   letterBase: { fontWeight: 'bold' },
+  goldBadge: { position: 'absolute', top: 1, right: 2, color: '#fcd34d', fontSize: 9, fontWeight: '900' },
   line: {
     position: 'absolute',
     backgroundColor: 'rgba(250, 204, 21, 0.75)',

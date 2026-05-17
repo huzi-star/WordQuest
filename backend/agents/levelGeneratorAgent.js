@@ -44,30 +44,54 @@ function randLetter() {
   return String.fromCharCode(65 + Math.floor(Math.random() * 26));
 }
 
-function placeWord(grid, word, size) {
-  const horizontal = Math.random() < 0.5;
+// Directions: hv only for easy, add diagonal for medium+, plus reverses
+// for hard. dr/dc give the row/col step per letter.
+const DIRECTIONS = {
+  horizontal: { dr: 0, dc: 1 },
+  vertical:   { dr: 1, dc: 0 },
+  diagonalDR: { dr: 1, dc: 1 },   // diagonal down-right
+  diagonalDL: { dr: 1, dc: -1 },  // diagonal down-left
+};
+
+function pickDirections(difficulty) {
+  if (difficulty === 'easy') return ['horizontal', 'vertical'];
+  if (difficulty === 'medium') return ['horizontal', 'vertical', 'diagonalDR'];
+  return ['horizontal', 'vertical', 'diagonalDR', 'diagonalDL'];
+}
+
+function placeWord(grid, word, size, allowedDirections) {
   const w = word.length;
   if (w > size) return false;
-  for (let tries = 0; tries < 60; tries++) {
-    const row = Math.floor(Math.random() * (horizontal ? size : size - w + 1));
-    const col = Math.floor(Math.random() * (horizontal ? size - w + 1 : size));
+  for (let tries = 0; tries < 120; tries++) {
+    const dirName = allowedDirections[Math.floor(Math.random() * allowedDirections.length)];
+    const { dr, dc } = DIRECTIONS[dirName];
+
+    // Pick a valid starting row/col so the word fits within bounds.
+    const maxRow = dr > 0 ? size - w : size - 1;
+    const maxCol = dc > 0 ? size - w : (dc < 0 ? size - 1 : size - 1);
+    const minRow = dr < 0 ? w - 1 : 0;
+    const minCol = dc < 0 ? w - 1 : 0;
+    const row = minRow + Math.floor(Math.random() * (maxRow - minRow + 1));
+    const col = minCol + Math.floor(Math.random() * (maxCol - minCol + 1));
+
     let ok = true;
     for (let i = 0; i < w; i++) {
-      const r = horizontal ? row : row + i;
-      const c = horizontal ? col + i : col;
+      const r = row + dr * i;
+      const c = col + dc * i;
+      if (r < 0 || c < 0 || r >= size || c >= size) { ok = false; break; }
       if (grid[r][c] && grid[r][c] !== word[i]) { ok = false; break; }
     }
     if (!ok) continue;
     for (let i = 0; i < w; i++) {
-      const r = horizontal ? row : row + i;
-      const c = horizontal ? col + i : col;
+      const r = row + dr * i;
+      const c = col + dc * i;
       grid[r][c] = word[i];
     }
     return {
       word,
       startRow: row,
       startCol: col,
-      direction: horizontal ? 'horizontal' : 'vertical',
+      direction: dirName, // 'horizontal' / 'vertical' / 'diagonalDR' / 'diagonalDL'
     };
   }
   return false;
@@ -89,8 +113,9 @@ function buildLocalPuzzle(difficulty, wordCount, lastCategory, gridSize = 8) {
 
   const grid = emptyGrid(gridSize);
   const positions = [];
+  const allowedDirs = pickDirections(difficulty);
   for (const w of chosen) {
-    const p = placeWord(grid, w, gridSize);
+    const p = placeWord(grid, w, gridSize, allowedDirs);
     if (p) positions.push(p);
   }
   for (let r = 0; r < gridSize; r++) {
