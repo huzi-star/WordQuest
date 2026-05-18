@@ -22,6 +22,7 @@ import { AuthProvider } from './src/utils/auth';
 import AnimatedSplash from './src/components/AnimatedSplash';
 import { SettingsProvider, useSettings } from './src/utils/settings';
 import { ThemeProvider, THEMES } from './src/utils/theme';
+import { useAuth } from './src/utils/auth';
 
 const Stack = createStackNavigator();
 
@@ -37,8 +38,16 @@ const navTheme = {
 
 function Navigator() {
   const { settings, ready } = useSettings();
-  if (!ready) return null;
-  const initialRoute = settings.hasSeenOnboarding ? 'Home' : 'Onboarding';
+  const { user, ready: authReady, configured } = useAuth();
+  if (!ready || !authReady) return null;
+
+  // Decide entry point:
+  //   - Supabase configured + not signed in  → Auth
+  //   - Signed in but onboarding never seen  → Onboarding
+  //   - Else                                 → Home
+  let initialRoute = 'Home';
+  if (configured && !user) initialRoute = 'Auth';
+  else if (!settings.hasSeenOnboarding) initialRoute = 'Onboarding';
 
   return (
     <Stack.Navigator

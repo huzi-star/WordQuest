@@ -7,10 +7,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../utils/theme';
 import { useSettings } from '../utils/settings';
 import { signUp, signIn } from '../utils/supabase';
+import { CommonActions } from '@react-navigation/native';
 
 export default function AuthScreen({ navigation }) {
   const theme = useTheme();
-  const { t } = useSettings();
+  const { t, settings } = useSettings();
   const [mode, setMode] = useState('login'); // 'login' | 'signup'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,6 +31,20 @@ export default function AuthScreen({ navigation }) {
     let res;
     if (mode === 'signup') {
       res = await signUp({ email: email.trim(), password, displayName: displayName.trim() || email.split('@')[0] });
+      // If email confirmation is OFF in Supabase, signUp creates the session
+      // immediately. If it's ON, signIn below will fail and we tell the user.
+      if (!res?.error) {
+        const signInRes = await signIn({ email: email.trim(), password });
+        if (signInRes?.error) {
+          setBusy(false);
+          Alert.alert(
+            'Account created',
+            'Inbox check karo — verification link click karne ke baad login karo.',
+          );
+          setMode('login');
+          return;
+        }
+      }
     } else {
       res = await signIn({ email: email.trim(), password });
     }
@@ -38,10 +53,11 @@ export default function AuthScreen({ navigation }) {
       Alert.alert(mode === 'signup' ? 'Sign-up failed' : 'Login failed', res.error);
       return;
     }
-    if (mode === 'signup') {
-      Alert.alert('Account created', 'Check your email for verification. You can play now — stats sync once verified.');
-    }
-    navigation.replace('Home');
+    // Decide next stop: onboarding if first time on this device, else Home.
+    const next = settings.hasSeenOnboarding ? 'Home' : 'Onboarding';
+    navigation.dispatch(
+      CommonActions.reset({ index: 0, routes: [{ name: next }] }),
+    );
   }
 
   return (
@@ -134,12 +150,8 @@ export default function AuthScreen({ navigation }) {
                 )}
               </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() => navigation.replace('Home')}
-                style={{ marginTop: 14, alignItems: 'center' }}
-              >
-                <Text style={styles.guestText}>Continue without account (local-only)</Text>
-              </TouchableOpacity>
+              {/* Guest mode removed — every player creates an account so their
+                  progress lives in the cloud. */}
             </View>
 
             <Text style={styles.legal}>

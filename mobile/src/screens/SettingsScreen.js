@@ -6,6 +6,7 @@ import { useTheme, THEMES } from '../utils/theme';
 import { resetStats } from '../utils/storage';
 import { useAuth } from '../utils/auth';
 import { signOut } from '../utils/supabase';
+import { CommonActions } from '@react-navigation/native';
 
 function Row({ icon, title, subtitle, right }) {
   return (
@@ -67,8 +68,15 @@ export default function SettingsScreen({ navigation }) {
                   subtitle={user.email}
                 />
                 <View style={styles.divider} />
-                <TouchableOpacity onPress={async () => { await signOut(); }}>
-                  <Row icon="🚪" title="Sign out" subtitle="Clear cloud session" right={<Text style={styles.dangerArrow}>→</Text>} />
+                <TouchableOpacity
+                  onPress={async () => {
+                    await signOut();
+                    navigation.dispatch(
+                      CommonActions.reset({ index: 0, routes: [{ name: 'Auth' }] }),
+                    );
+                  }}
+                >
+                  <Row icon="🚪" title="Sign out" subtitle="Login screen pe wapas" right={<Text style={styles.dangerArrow}>→</Text>} />
                 </TouchableOpacity>
               </>
             ) : (
