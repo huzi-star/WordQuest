@@ -88,23 +88,23 @@ export default function GameOverScreen({ navigation, route }) {
           {coachLoading ? (
             <View style={{ paddingVertical: 16, alignItems: 'center' }}>
               <ActivityIndicator color="#22c55e" />
-              <Text style={styles.coachLoadingText}>Gemini tumhari performance analyse kar raha hai...</Text>
+              <Text style={styles.coachLoadingText}>Gemini is analyzing your performance...</Text>
             </View>
           ) : coach ? (
             <View style={{ gap: 10 }}>
               <Text style={styles.headline}>{coach.headline}</Text>
 
-              <Text style={styles.subhead}>💪 Tumhari Strengths:</Text>
+              <Text style={styles.subhead}>💪 Your strengths:</Text>
               {coach.strengths.map((s, i) => (
                 <Text key={`s${i}`} style={styles.bullet}>• {s}</Text>
               ))}
 
-              <Text style={styles.subhead}>📈 Improve karo:</Text>
+              <Text style={styles.subhead}>📈 Areas to improve:</Text>
               {coach.improvements.map((s, i) => (
                 <Text key={`i${i}`} style={styles.bullet}>• {s}</Text>
               ))}
 
-              <Text style={styles.subhead}>🎯 Practice ye words:</Text>
+              <Text style={styles.subhead}>🎯 Practice these words:</Text>
               <View style={styles.practiceRow}>
                 {coach.practice.map((w, i) => (
                   <View key={`p${i}`} style={styles.practiceChip}>
@@ -116,7 +116,7 @@ export default function GameOverScreen({ navigation, route }) {
               <Text style={styles.nextMove}>👉 {coach.nextMove}</Text>
             </View>
           ) : (
-            <Text style={styles.coachLoadingText}>Coach offline — phir try karna.</Text>
+            <Text style={styles.coachLoadingText}>Coach offline — please try again later.</Text>
           )}
         </View>
 
@@ -140,7 +140,7 @@ export default function GameOverScreen({ navigation, route }) {
             })
           }
         >
-          <Text style={styles.restartText}>🔄 Dobara Khelo</Text>
+          <Text style={styles.restartText}>🔄 Play again</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

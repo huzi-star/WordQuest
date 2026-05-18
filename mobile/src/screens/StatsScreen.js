@@ -182,7 +182,7 @@ export default function StatsScreen({ navigation }) {
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>📊 My Stats</Text>
-              <Text style={styles.subtitle}>Tumhari poori journey</Text>
+              <Text style={styles.subtitle}>Your full journey</Text>
             </View>
           </View>
 

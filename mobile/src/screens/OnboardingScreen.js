@@ -12,25 +12,25 @@ const SLIDES = [
   {
     icon: '🎮',
     titleK: 'Welcome to WordQuest',
-    bodyK: 'AI ke saath khelo — har round Gemini design karta hai, har word tumhare liye unique hai.',
+    bodyK: 'Every round is designed live by Gemini AI. No two puzzles are alike.',
     bodyE: 'Every round is designed live by Gemini AI. No two puzzles are alike.',
   },
   {
     icon: '👆',
-    titleK: 'Drag ya Tap',
-    bodyK: 'Letters par finger drag karo ya ek-ek tap karo. Horizontal, vertical aur diagonals — sab chalega.',
+    titleK: 'Drag or Tap',
+    bodyK: 'Drag your finger across letters or tap them one by one. Horizontal, vertical and diagonal — all work.',
     bodyE: 'Drag your finger across letters or tap them one by one. Horizontal, vertical and diagonal — all work.',
   },
   {
     icon: '🤖',
     titleK: '8 AI Agents',
-    bodyK: 'Difficulty, generator, referee, tutor, commentator, coach, reward — sab tumhare saath khelte hain.',
+    bodyK: 'Difficulty, generator, referee, tutor, commentator, coach and reward agents all collaborate on every round.',
     bodyE: 'Difficulty, generator, referee, tutor, commentator, coach and reward agents all collaborate on every round.',
   },
   {
     icon: '🚀',
     titleK: '15 levels + Daily',
-    bodyK: '15 levels unlock karte jao. Roz ek special Daily Challenge bhi milta hai jo sab khelte hain.',
+    bodyK: '15 levels to unlock plus a global Daily Challenge — same puzzle for everyone, every day.',
     bodyE: '15 levels to unlock plus a global Daily Challenge — same puzzle for everyone, every day.',
   },
 ];

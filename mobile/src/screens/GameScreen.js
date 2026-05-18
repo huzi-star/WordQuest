@@ -25,14 +25,15 @@ const COMMENTARY = {
     gold:       ['Gold cell! Double points.', 'Bonus square hit!'],
     perfect_round: ['Perfect round! All words found.'],
   },
+  // Urdu pool intentionally mirrors English — the app is English-first.
   urdu: {
-    word_found: ['Sahi!', 'Wah!', 'Acha kaam!', 'Ek aur!', 'Keep going!'],
-    streak:     ['{streak} in a row — fire pe ho!', 'Streak {streak}! Combo active.', 'Combo {streak} — kamaal!'],
-    half_time:  ['Half time — {wordsFound}/{totalWords}. Speed up!', 'Aadha time gaya — focus.'],
-    low_time:   ['Sirf {timeLeft}s baqi — jaldi!', 'Final stretch — hurry!'],
-    idle:       ['Diagonals bhi try karo.', 'Rare letter se shuru karo.', 'Stuck? Hint sirf 30 ka hai.'],
-    gold:       ['Gold cell! Double points.', 'Bonus square mil gaya!'],
-    perfect_round: ['Perfect round! Sab mil gaye.'],
+    word_found: ['Nice find!', 'Got it!', 'Great work!', 'One more!', 'Keep going!'],
+    streak:     ['{streak} in a row — on fire!', 'Streak {streak}! Combo active.', 'Combo {streak} — amazing!'],
+    half_time:  ['Half time — {wordsFound}/{totalWords}. Push it!', 'Halfway done — focus.'],
+    low_time:   ['Only {timeLeft}s left — grab anything!', 'Final stretch — hurry!'],
+    idle:       ['Check the diagonals too.', 'Try a rare letter as the start.', 'Stuck? A hint costs 30.'],
+    gold:       ['Gold cell! Double points.', 'Bonus square hit!'],
+    perfect_round: ['Perfect round! All words found.'],
   },
 };
 function pickLine(trigger, language, vars) {
@@ -152,7 +153,7 @@ export default function GameScreen({ navigation, route }) {
 
   function useHint() {
     if (hintsLeft <= 0) {
-      showAgent('Hints khatam — agle round mein milenge', 2200);
+      showAgent('Hints used up — refresh next round', 2200);
       return;
     }
     // Find an unfound word and reveal one of its cells.
@@ -212,14 +213,14 @@ export default function GameScreen({ navigation, route }) {
     if (foundWords.includes(upper)) {
       return {
         isValid: false, alreadyFound: true, pointsEarned: 0, newScore: currentScore,
-        message: 'Yeh pehle mil gaya tha!',
+        message: 'Already found that one!',
         breakdown: { basePoints: 0, timeBonus: 0, multiplier: 1 },
       };
     }
     if (!wordList.includes(upper)) {
       return {
         isValid: false, alreadyFound: false, pointsEarned: 0, newScore: currentScore,
-        message: 'Yeh list mein nahi',
+        message: 'Not in the word list',
         breakdown: { basePoints: 0, timeBonus: 0, multiplier: 1 },
       };
     }
@@ -242,7 +243,7 @@ export default function GameScreen({ navigation, route }) {
     return {
       isValid: true, alreadyFound: false, pointsEarned: totalPoints,
       newScore: currentScore + totalPoints,
-      message: `Zabardast! +${totalPoints} points`,
+      message: `Awesome! +${totalPoints} points`,
       breakdown: { basePoints, timeBonus, multiplier, effectiveStreak },
     };
   }

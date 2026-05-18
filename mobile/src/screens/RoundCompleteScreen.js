@@ -92,10 +92,10 @@ export default function RoundCompleteScreen({ navigation, route }) {
   const effectiveScore = isDailyRound && isFailed ? 0 : roundScore;
   const heroTitle = isFailed ? 'FAILED' : 'LEVEL COMPLETED';
   const heroSub = isFailed
-    ? 'Agli baar aur behtar! 💔'
-    : stars === 3 ? 'Perfect! Sab mil gaye 🇵🇰'
-    : stars === 2 ? 'Acha kaam — keep going!'
-    : 'Pass — agla level try karo';
+    ? 'Better luck next time! 💔'
+    : stars === 3 ? 'Perfect! Every word found 🏆'
+    : stars === 2 ? 'Good work — keep going!'
+    : 'Passed — try the next level';
   const accent = isFailed ? '#ef4444' : stars === 3 ? theme.accent : stars === 2 ? theme.gold : '#fb923c';
 
   const winEmojis = ['🇵🇰', '🎉', '✨', '⭐', '🏆', '🥳', '🎊', '👑', '💚', '🌟', '🎆', '🪅'];

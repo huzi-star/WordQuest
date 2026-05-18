@@ -15,10 +15,10 @@ const STEPS = {
     { icon: '✨', text: 'Final touches by the AI...' },
   ],
   urdu: [
-    { icon: '🧠', text: 'Difficulty agent stats analyse kar raha...' },
-    { icon: '🎨', text: 'Level generator grid bana raha...' },
-    { icon: '📚', text: 'Tutor agent facts taiyaar kar raha...' },
-    { icon: '✨', text: 'AI final touches laga raha...' },
+    { icon: '🧠', text: 'Difficulty agent analyzing your stats...' },
+    { icon: '🎨', text: 'Level generator building the grid...' },
+    { icon: '📚', text: 'Tutor agent preparing facts...' },
+    { icon: '✨', text: 'AI adding final touches...' },
   ],
 };
 
@@ -96,13 +96,13 @@ function ErrorState({ message, onRetry, theme }) {
   return (
     <View style={styles.loadWrap}>
       <Text style={styles.errEmoji}>⚠️</Text>
-      <Text style={styles.errTitle}>Connection nahi hua</Text>
+      <Text style={styles.errTitle}>Could not connect</Text>
       <Text style={styles.errSub}>{message}</Text>
       <TouchableOpacity
         style={[styles.retryBtn, { backgroundColor: theme.accent }]}
         onPress={onRetry}
       >
-        <Text style={[styles.retryText, { color: theme.bg }]}>Dobara try karo</Text>
+        <Text style={[styles.retryText, { color: theme.bg }]}>Try again</Text>
       </TouchableOpacity>
     </View>
   );
@@ -193,7 +193,7 @@ export default function CategoryScreen({ navigation, route }) {
           {chaalbaazActive ? (
             <Animated.View style={[styles.chaalbaazBanner, { opacity: fadeIn }]}>
               <Text style={styles.chaalbaazTitle}>😏 ADVERSARY ACTIVATED</Text>
-              <Text style={styles.chaalbaazSub}>Tum acha kar rahe ho — Chaalbaaz ne difficulty barha di!</Text>
+              <Text style={styles.chaalbaazSub}>You're doing great — Chaalbaaz cranked up the difficulty!</Text>
             </Animated.View>
           ) : null}
 

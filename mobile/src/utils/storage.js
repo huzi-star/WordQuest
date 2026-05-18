@@ -40,6 +40,8 @@ const DEFAULTS = {
   // When the user last attempted the daily challenge (ms epoch).
   // Daily challenge re-unlocks 12 hours after this timestamp.
   dailyChallengeLastAttemptAt: 0,
+  // When the user last completed a quiz. Quiz mode re-unlocks 12 h later.
+  quizLastAttemptAt: 0,
 };
 
 function todayKey() {
@@ -144,6 +146,15 @@ export async function rememberQuizQuestions(questions) {
     const incoming = questions.map((q) => String(q));
     const dedup = Array.from(new Set([...incoming, ...(current.recentQuizQuestions || [])])).slice(0, 40);
     const next = { ...current, recentQuizQuestions: dedup };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
+}
+
+export async function markQuizAttempt() {
+  try {
+    const current = await loadStats();
+    const next = { ...current, quizLastAttemptAt: Date.now() };
     await AsyncStorage.setItem(K(), JSON.stringify(next));
     return next;
   } catch { return null; }

@@ -107,7 +107,7 @@ export default function DailyChallengeScreen({ navigation }) {
             </View>
             <Text style={[styles.lockTitle, { color: theme.gold }]}>CHALLENGE LOCKED</Text>
             <Text style={styles.lockSub}>
-              Aaj ka challenge khel chuke ho. {LOCK_HOURS} ghantey baad naya unlock hoga.
+              You have already played today's challenge. A fresh puzzle unlocks in {LOCK_HOURS} hours.
             </Text>
 
             <Text style={styles.countdownLabel}>UNLOCKS IN</Text>
@@ -116,7 +116,7 @@ export default function DailyChallengeScreen({ navigation }) {
             <View style={styles.lockTipBox}>
               <Text style={styles.tipIcon}>💡</Text>
               <Text style={styles.tipText}>
-                Tab tak Quick Play, Levels ya Quiz Mode khelo!
+                Meanwhile, try Quick Play, Levels, or Quiz Mode!
               </Text>
             </View>
           </View>
@@ -134,7 +134,7 @@ export default function DailyChallengeScreen({ navigation }) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: theme.bg }]}>
         <ActivityIndicator size="large" color={theme.gold} />
-        <Text style={[styles.loadText, { color: theme.gold }]}>Aaj ka challenge load ho raha...</Text>
+        <Text style={[styles.loadText, { color: theme.gold }]}>Loading today's challenge...</Text>
       </SafeAreaView>
     );
   }
@@ -142,9 +142,9 @@ export default function DailyChallengeScreen({ navigation }) {
   if (!data) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: theme.bg }]}>
-        <Text style={styles.errText}>Daily challenge load nahi hua.</Text>
+        <Text style={styles.errText}>Daily challenge failed to load.</Text>
         <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.retryBtn, { backgroundColor: theme.accent }]}>
-          <Text style={[styles.retryText, { color: theme.bg }]}>Wapas jao</Text>
+          <Text style={[styles.retryText, { color: theme.bg }]}>Go back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -205,14 +205,14 @@ export default function DailyChallengeScreen({ navigation }) {
           </View>
 
           <Text style={[styles.note, { color: theme.gold }]}>
-            Sirf ek attempt. Complete na hua = 0 points & level failed.
+            One attempt only. Incomplete = 0 points & level failed.
           </Text>
         </View>
 
         <View style={styles.tipBox}>
           <Text style={styles.tipIcon}>⚠️</Text>
           <Text style={styles.tipText}>
-            Challenge ke baad {LOCK_HOURS} ghantey ke liye lock — agla puzzle countdown khatam hone par.
+            After this attempt, Daily Challenge locks for {LOCK_HOURS} hours — next puzzle drops when the countdown ends.
           </Text>
         </View>
 

@@ -1,49 +1,107 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../utils/theme';
 import { useSettings } from '../utils/settings';
 import { generateQuiz } from '../utils/api';
-import { loadStats, rememberQuizTopic, rememberQuizQuestions } from '../utils/storage';
+import {
+  loadStats, rememberQuizTopic, rememberQuizQuestions, markQuizAttempt,
+} from '../utils/storage';
+
+const QUIZ_QUESTIONS = 20;
+const SECONDS_PER_QUESTION = 7;
+const POINTS_PER_CORRECT = 200;
+const LOCK_HOURS = 12;
+const LOCK_MS = LOCK_HOURS * 60 * 60 * 1000;
+
+function formatHMS(ms) {
+  if (ms <= 0) return '00:00:00';
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
 
 export default function QuizScreen({ navigation }) {
   const theme = useTheme();
-  const { t } = useSettings();
+  const { settings, t } = useSettings();
   const [loading, setLoading] = useState(true);
   const [quiz, setQuiz] = useState(null);
   const [idx, setIdx] = useState(0);
   const [picked, setPicked] = useState(null);
   const [score, setScore] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
   const [done, setDone] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(6);
+  const [timeLeft, setTimeLeft] = useState(SECONDS_PER_QUESTION);
+  const [lockedUntil, setLockedUntil] = useState(0);
+  const [now, setNow] = useState(Date.now());
   const fade = useRef(new Animated.Value(0)).current;
   const tickRef = useRef(null);
 
-  // 6-second countdown per question. When time runs out we auto-mark as
-  // unanswered (no score gain) and advance after a short feedback delay.
+  // On focus: check lock status, then load quiz if unlocked.
+  useFocusEffect(useCallback(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const s = await loadStats();
+      const last = s.quizLastAttemptAt || 0;
+      const unlocksAt = last + LOCK_MS;
+      if (Date.now() < unlocksAt) {
+        if (!cancelled) {
+          setLockedUntil(unlocksAt);
+          setLoading(false);
+        }
+        return;
+      }
+      setLockedUntil(0);
+      const recentTopics = s.recentQuizTopics || [];
+      const recentQs = s.recentQuizQuestions || [];
+      const res = await generateQuiz({
+        count: QUIZ_QUESTIONS, difficulty: 'medium',
+        excludeTopics: recentTopics,
+        excludeQuestions: recentQs.slice(0, 40),
+        language: settings.language,
+      });
+      if (cancelled) return;
+      if (res?.ok && res.result?.questions?.length) {
+        setQuiz(res.result);
+        if (res.result.topic) rememberQuizTopic(res.result.topic);
+        rememberQuizQuestions(res.result.questions.map((q) => q.question));
+      }
+      setLoading(false);
+      Animated.timing(fade, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    })();
+    return () => { cancelled = true; };
+  }, [settings.language]));
+
+  // 7-second per-question timer.
   useEffect(() => {
     if (loading || !quiz || done) return undefined;
-    if (picked !== null) return undefined; // freeze when answered
-    setTimeLeft(6);
+    if (picked !== null) return undefined;
+    setTimeLeft(SECONDS_PER_QUESTION);
     if (tickRef.current) clearInterval(tickRef.current);
     tickRef.current = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
+      setTimeLeft((tl) => {
+        if (tl <= 1) {
           clearInterval(tickRef.current);
           tickRef.current = null;
-          // Mark as time-up: pick a sentinel value (-1) so the option cards
-          // still reveal the correct answer briefly.
+          // -1 sentinel = time out, no score gain.
           setPicked(-1);
           setTimeout(() => {
             setPicked(null);
-            if (idx >= quiz.questions.length - 1) setDone(true);
-            else setIdx((i) => i + 1);
-          }, 1500);
+            if (idx >= quiz.questions.length - 1) {
+              finishQuiz();
+            } else {
+              setIdx((i) => i + 1);
+            }
+          }, 1400);
           return 0;
         }
-        return t - 1;
+        return tl - 1;
       });
     }, 1000);
     return () => {
@@ -54,25 +112,17 @@ export default function QuizScreen({ navigation }) {
     };
   }, [idx, loading, quiz, picked, done]);
 
+  // Lock countdown.
   useEffect(() => {
-    (async () => {
-      const s = await loadStats();
-      const recentTopics = s.recentQuizTopics || [];
-      const recentQs = s.recentQuizQuestions || [];
-      const res = await generateQuiz({
-        count: 8, difficulty: 'medium',
-        excludeTopics: recentTopics,
-        excludeQuestions: recentQs.slice(0, 24),
-      });
-      if (res?.ok && res.result?.questions?.length) {
-        setQuiz(res.result);
-        if (res.result.topic) rememberQuizTopic(res.result.topic);
-        rememberQuizQuestions(res.result.questions.map((q) => q.question));
-      }
-      setLoading(false);
-      Animated.timing(fade, { toValue: 1, duration: 400, useNativeDriver: true }).start();
-    })();
-  }, []);
+    if (!lockedUntil) return undefined;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [lockedUntil]);
+
+  async function finishQuiz() {
+    setDone(true);
+    await markQuizAttempt();
+  }
 
   function pickOption(i) {
     if (picked !== null) return;
@@ -82,23 +132,66 @@ export default function QuizScreen({ navigation }) {
     }
     setPicked(i);
     if (i === quiz.questions[idx].correctIndex) {
-      setScore((s) => s + 1);
+      setScore((s) => s + POINTS_PER_CORRECT);
+      setCorrectCount((c) => c + 1);
     }
   }
   function next() {
     if (idx >= quiz.questions.length - 1) {
-      setDone(true);
+      finishQuiz();
     } else {
       setIdx((i) => i + 1);
       setPicked(null);
     }
   }
 
+  // LOCKED STATE
+  if (lockedUntil) {
+    const remaining = Math.max(0, lockedUntil - now);
+    return (
+      <View style={[styles.container, { backgroundColor: theme.bg }]}>
+        <View style={[styles.blob, { backgroundColor: theme.accent2, top: -120, right: -100 }]} />
+        <SafeAreaView style={{ flex: 1, padding: 20 }}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.back, { borderColor: theme.border }]}>
+              <Text style={styles.backIcon}>←</Text>
+            </TouchableOpacity>
+            <View>
+              <Text style={[styles.title, { color: theme.accent2 }]}>🎓 Quiz Mode</Text>
+              <Text style={styles.subtitle}>AI-generated trivia</Text>
+            </View>
+          </View>
+
+          <View style={{ flex: 1, justifyContent: 'center' }}>
+            <View style={[styles.lockedCard, { backgroundColor: theme.card, borderColor: theme.accent2, shadowColor: theme.accent2 }]}>
+              <View style={[styles.lockCircle, { borderColor: theme.accent2 }]}>
+                <Text style={styles.lockEmoji}>🔒</Text>
+              </View>
+              <Text style={[styles.lockTitle, { color: theme.accent2 }]}>QUIZ LOCKED</Text>
+              <Text style={styles.lockSub}>
+                You have finished today's quiz. A fresh set of {QUIZ_QUESTIONS} questions unlocks in {LOCK_HOURS} hours.
+              </Text>
+              <Text style={styles.countdownLabel}>UNLOCKS IN</Text>
+              <Text style={[styles.countdown, { color: theme.accent2 }]}>{formatHMS(remaining)}</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.btn, { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={[styles.btnText, { color: '#cbd5e1' }]}>← BACK TO HOME</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: theme.bg }]}>
         <ActivityIndicator size="large" color={theme.accent} />
-        <Text style={[styles.loadText, { color: theme.accent }]}>AI quiz generate kar raha...</Text>
+        <Text style={[styles.loadText, { color: theme.accent }]}>AI is generating your quiz...</Text>
       </SafeAreaView>
     );
   }
@@ -106,33 +199,41 @@ export default function QuizScreen({ navigation }) {
   if (!quiz) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: theme.bg }]}>
-        <Text style={styles.errText}>Quiz load nahi hua.</Text>
+        <Text style={styles.errText}>Quiz could not load.</Text>
         <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.retryBtn, { backgroundColor: theme.accent }]}>
-          <Text style={styles.retryText}>{t('back')}</Text>
+          <Text style={styles.retryText}>Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
+  // DONE STATE — show total score
   if (done) {
     const total = quiz.questions.length;
-    const pct = Math.round((score / total) * 100);
+    const pct = Math.round((correctCount / total) * 100);
+    const finalScore = correctCount * POINTS_PER_CORRECT;
     return (
       <View style={[styles.container, { backgroundColor: theme.bg }]}>
         <View style={[styles.blob, { backgroundColor: theme.accent, top: -120, right: -100 }]} />
         <SafeAreaView style={{ flex: 1, padding: 20 }}>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={styles.resultEmoji}>{pct >= 75 ? '🏆' : pct >= 50 ? '🎯' : '💪'}</Text>
-            <Text style={[styles.resultTitle, { color: theme.accent }]}>{t('quiz_results')}</Text>
-            <Text style={styles.scoreLine}>{t('quiz_score')}: {score} / {total}</Text>
-            <Text style={[styles.scorePct, { color: theme.gold }]}>{pct}%</Text>
+            <Text style={[styles.resultTitle, { color: theme.accent }]}>Quiz Complete!</Text>
+
+            <View style={[styles.totalCard, { borderColor: theme.gold, backgroundColor: theme.card, shadowColor: theme.gold }]}>
+              <Text style={[styles.totalLabel, { color: theme.gold }]}>TOTAL SCORE</Text>
+              <Text style={[styles.totalValue, { color: theme.gold }]}>{finalScore}</Text>
+              <Text style={styles.totalMeta}>{correctCount} correct / {total} questions · {pct}%</Text>
+            </View>
+
             <Text style={styles.topic}>{quiz.topicEmoji} {quiz.topic}</Text>
+            <Text style={styles.lockNote}>Quiz locked for {LOCK_HOURS} hours — new questions tomorrow.</Text>
           </View>
           <TouchableOpacity
             style={[styles.btn, { backgroundColor: theme.accent }]}
             onPress={() => navigation.replace('Home')}
           >
-            <Text style={styles.btnText}>{t('quiz_finish')}</Text>
+            <Text style={styles.btnText}>BACK TO HOME</Text>
           </TouchableOpacity>
         </SafeAreaView>
       </View>
@@ -148,12 +249,12 @@ export default function QuizScreen({ navigation }) {
       <View style={[styles.blob, { backgroundColor: theme.accent, top: -120, right: -100, opacity: 0.13 }]} />
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.back, { borderColor: theme.border }]}>
             <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={[styles.title, { color: theme.accent }]}>{quiz.topicEmoji} {quiz.topic}</Text>
-            <Text style={styles.subtitle}>{t('quiz_question')} {idx + 1} / {quiz.questions.length}</Text>
+            <Text style={styles.subtitle}>Question {idx + 1} / {quiz.questions.length}</Text>
           </View>
           <View style={styles.pillsRow}>
             <View
@@ -165,12 +266,7 @@ export default function QuizScreen({ navigation }) {
                 },
               ]}
             >
-              <Text
-                style={[
-                  styles.timeText,
-                  { color: timeLeft <= 2 ? '#ef4444' : theme.accent },
-                ]}
-              >
+              <Text style={[styles.timeText, { color: timeLeft <= 2 ? '#ef4444' : theme.accent }]}>
                 ⏱ {timeLeft}s
               </Text>
             </View>
@@ -215,7 +311,7 @@ export default function QuizScreen({ navigation }) {
 
             {showFeedback ? (
               <View style={[styles.explainCard, { borderColor: theme.gold }]}>
-                <Text style={[styles.explainLabel, { color: theme.gold }]}>{t('ai_agent')}</Text>
+                <Text style={[styles.explainLabel, { color: theme.gold }]}>AI AGENT</Text>
                 <Text style={styles.explainText}>{q.explanation}</Text>
               </View>
             ) : null}
@@ -228,7 +324,9 @@ export default function QuizScreen({ navigation }) {
               style={[styles.btn, { backgroundColor: theme.accent }]}
               onPress={next}
             >
-              <Text style={styles.btnText}>{idx === quiz.questions.length - 1 ? t('quiz_finish') : t('quiz_next')}</Text>
+              <Text style={styles.btnText}>
+                {idx === quiz.questions.length - 1 ? 'FINISH QUIZ' : 'NEXT QUESTION →'}
+              </Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -247,7 +345,7 @@ const styles = StyleSheet.create({
   retryText: { color: '#0f172a', fontWeight: '900' },
 
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 18 },
-  back: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(148,163,184,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#1f2937' },
+  back: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(148,163,184,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   backIcon: { color: '#fff', fontSize: 22 },
   title: { fontSize: 18, fontWeight: '900' },
   subtitle: { color: '#94a3b8', fontSize: 12 },
@@ -276,7 +374,26 @@ const styles = StyleSheet.create({
   // Results
   resultEmoji: { fontSize: 80 },
   resultTitle: { fontSize: 26, fontWeight: '900', marginTop: 8 },
-  scoreLine: { color: '#cbd5e1', fontSize: 16, marginTop: 12 },
-  scorePct: { fontSize: 64, fontWeight: '900', marginTop: 4 },
-  topic: { color: '#94a3b8', fontSize: 14, marginTop: 12 },
+  totalCard: {
+    marginTop: 24, paddingHorizontal: 30, paddingVertical: 22,
+    borderRadius: 22, borderWidth: 2, alignItems: 'center',
+    shadowOpacity: 0.4, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 12,
+  },
+  totalLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 2 },
+  totalValue: { fontSize: 60, fontWeight: '900', marginTop: 4 },
+  totalMeta: { color: '#cbd5e1', fontSize: 13, marginTop: 4 },
+  topic: { color: '#94a3b8', fontSize: 14, marginTop: 16 },
+  lockNote: { color: '#fcd34d', fontSize: 12, marginTop: 8, fontWeight: '700' },
+
+  // Locked card
+  lockedCard: {
+    borderRadius: 22, padding: 22, borderWidth: 2, alignItems: 'center',
+    shadowOpacity: 0.35, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 12,
+  },
+  lockCircle: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', borderWidth: 2, backgroundColor: 'rgba(167,139,250,0.12)' },
+  lockEmoji: { fontSize: 50 },
+  lockTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 2, marginTop: 14 },
+  lockSub: { color: '#cbd5e1', textAlign: 'center', marginTop: 6, fontSize: 13, lineHeight: 19 },
+  countdownLabel: { color: '#94a3b8', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginTop: 16 },
+  countdown: { fontSize: 38, fontWeight: '900', letterSpacing: 2, marginTop: 4 },
 });

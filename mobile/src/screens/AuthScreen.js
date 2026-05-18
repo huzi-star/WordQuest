@@ -28,11 +28,11 @@ export default function AuthScreen({ navigation }) {
 
   async function submit() {
     if (!email || !password) {
-      Alert.alert('Missing fields', 'Email aur password dono zaroori hain.');
+      Alert.alert('Missing fields', 'Both email and password are required.');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Weak password', 'Password kam se kam 6 characters ka ho.');
+      Alert.alert('Weak password', 'Password must be at least 6 characters.');
       return;
     }
     setBusy(true);
