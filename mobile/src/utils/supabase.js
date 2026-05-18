@@ -84,7 +84,7 @@ export async function fetchStats(userId) {
   return data;
 }
 
-export async function upsertStats(userId, stats) {
+export async function upsertStats(userId, stats, prefs = {}) {
   if (!supabase || !userId) return;
   const payload = {
     user_id: userId,
@@ -102,10 +102,22 @@ export async function upsertStats(userId, stats) {
     category_stats: stats.categoryStats || {},
     recent_scores: stats.recentScores || [],
     active_days: stats.activeDays || {},
+    preferences: {
+      theme: prefs.theme || 'green',
+      language: prefs.language || 'english',
+      sound: prefs.sound !== false,
+      vibration: prefs.vibration !== false,
+    },
     updated_at: new Date().toISOString(),
   };
   const { error } = await supabase
     .from('user_stats')
     .upsert(payload, { onConflict: 'user_id' });
   if (error) console.warn('upsertStats error:', error.message);
+}
+
+export async function deleteUserStats(userId) {
+  if (!supabase || !userId) return;
+  const { error } = await supabase.from('user_stats').delete().eq('user_id', userId);
+  if (error) console.warn('deleteUserStats error:', error.message);
 }

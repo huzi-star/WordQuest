@@ -2,7 +2,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { setApiLanguage } from './api';
 
-const KEY = 'wordquest:settings:v1';
+const BASE = 'wordquest:settings:v1';
+let currentUserId = null;
+
+// Settings are namespaced per user so theme / language follow the account.
+export function setSettingsUserScope(uid) {
+  currentUserId = uid || null;
+}
+function K() {
+  return `${BASE}:${currentUserId || '_guest'}`;
+}
 
 export const DEFAULTS = {
   sound: true,
@@ -131,7 +140,7 @@ const STRINGS = {
 
 async function loadSettings() {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await AsyncStorage.getItem(K());
     if (!raw) return { ...DEFAULTS };
     return { ...DEFAULTS, ...JSON.parse(raw) };
   } catch {
@@ -140,10 +149,10 @@ async function loadSettings() {
 }
 
 async function persist(settings) {
-  try { await AsyncStorage.setItem(KEY, JSON.stringify(settings)); } catch {}
+  try { await AsyncStorage.setItem(K(), JSON.stringify(settings)); } catch {}
 }
 
-const SettingsContext = createContext({ settings: DEFAULTS, setSetting: () => {}, t: (k) => k, ready: false });
+const SettingsContext = createContext({ settings: DEFAULTS, setSetting: () => {}, t: (k) => k, ready: false, refresh: async () => {}, applyServer: () => {} });
 
 export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState(DEFAULTS);
@@ -173,8 +182,26 @@ export function SettingsProvider({ children }) {
     return entry[settings.language] || entry.urdu || key;
   };
 
+  // Re-read AsyncStorage (called after auth state changes the scope).
+  const refresh = async () => {
+    const s = await loadSettings();
+    setSettings(s);
+    setApiLanguage(s.language);
+  };
+
+  // Apply server-provided preferences (e.g. after syncDown from Supabase).
+  const applyServer = async (partial) => {
+    if (!partial || typeof partial !== 'object') return;
+    setSettings((prev) => {
+      const next = { ...prev, ...partial };
+      persist(next);
+      if (partial.language) setApiLanguage(partial.language);
+      return next;
+    });
+  };
+
   return (
-    <SettingsContext.Provider value={{ settings, setSetting, t, ready }}>
+    <SettingsContext.Provider value={{ settings, setSetting, t, ready, refresh, applyServer }}>
       {children}
     </SettingsContext.Provider>
   );

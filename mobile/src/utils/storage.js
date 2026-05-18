@@ -1,6 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const KEY = 'wordquest:stats:v2';
+// Stats are stored per logged-in user so two accounts on the same phone
+// never see each other's data. setStatsUserScope(uid) is called by the
+// AuthProvider whenever the auth state changes.
+
+const BASE = 'wordquest:stats:v2';
+let currentUserId = null;
+
+export function setStatsUserScope(uid) {
+  currentUserId = uid || null;
+}
+
+function K() {
+  return `${BASE}:${currentUserId || '_guest'}`;
+}
 
 const DEFAULTS = {
   highScore: 0,
@@ -16,7 +29,6 @@ const DEFAULTS = {
   recentScores: [],
   activeDays: {},
   achievements: [],
-  // Levels progression: 15 levels, level 1 is unlocked by default.
   maxUnlockedLevel: 1,
   completedLevels: [],
 };
@@ -28,11 +40,10 @@ function todayKey() {
 
 export async function loadStats() {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const raw = await AsyncStorage.getItem(K());
     if (!raw) return { ...DEFAULTS };
-    const parsed = JSON.parse(raw);
-    return { ...DEFAULTS, ...parsed };
-  } catch (err) {
+    return { ...DEFAULTS, ...JSON.parse(raw) };
+  } catch {
     return { ...DEFAULTS };
   }
 }
@@ -41,40 +52,28 @@ export async function saveStats(patch) {
   try {
     const current = await loadStats();
     const next = { ...current, ...patch };
-    if (typeof patch.highScore === 'number') {
-      next.highScore = Math.max(current.highScore, patch.highScore);
-    }
-    if (typeof patch.bestStreak === 'number') {
-      next.bestStreak = Math.max(current.bestStreak, patch.bestStreak);
-    }
-    await AsyncStorage.setItem(KEY, JSON.stringify(next));
+    if (typeof patch.highScore === 'number') next.highScore = Math.max(current.highScore, patch.highScore);
+    if (typeof patch.bestStreak === 'number') next.bestStreak = Math.max(current.bestStreak, patch.bestStreak);
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
     return next;
-  } catch (err) {
+  } catch {
     return DEFAULTS;
   }
 }
 
-// Convenience: log one completed round's worth of stats.
 export async function logRound({
-  category = '',
-  wordsFound = 0,
-  totalWords = 0,
-  timeSpent = 0,
-  roundScore = 0,
-  perfect = false,
-  hintsUsed = 0,
+  category = '', wordsFound = 0, totalWords = 0,
+  timeSpent = 0, roundScore = 0, perfect = false, hintsUsed = 0,
 }) {
   try {
     const current = await loadStats();
     const next = { ...current };
-
     next.totalRoundsPlayed += 1;
     next.totalWordsFound += wordsFound;
     next.totalTimeSpent += Math.max(0, timeSpent);
     next.totalScoreEver += Math.max(0, roundScore);
     next.hintsUsed += Math.max(0, hintsUsed);
     if (perfect) next.perfectRounds += 1;
-
     if (category) {
       const cat = next.categoryStats[category] || { played: 0, wordsFound: 0, totalWords: 0, perfectCount: 0 };
       cat.played += 1;
@@ -83,15 +82,11 @@ export async function logRound({
       if (perfect) cat.perfectCount += 1;
       next.categoryStats = { ...next.categoryStats, [category]: cat };
     }
-
     next.recentScores = [roundScore, ...current.recentScores].slice(0, 20);
     next.activeDays = { ...current.activeDays, [todayKey()]: true };
-
-    await AsyncStorage.setItem(KEY, JSON.stringify(next));
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
     return next;
-  } catch (err) {
-    return null;
-  }
+  } catch { return null; }
 }
 
 export async function logGameOver({ finalScore = 0, finalStreak = 0 }) {
@@ -103,18 +98,16 @@ export async function logGameOver({ finalScore = 0, finalStreak = 0 }) {
       highScore: Math.max(current.highScore, finalScore),
       bestStreak: Math.max(current.bestStreak, finalStreak),
     };
-    await AsyncStorage.setItem(KEY, JSON.stringify(next));
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
     return next;
-  } catch (err) {
-    return null;
-  }
+  } catch { return null; }
 }
 
+// Reset stats for the CURRENTLY active user scope only.
 export async function resetStats() {
-  try { await AsyncStorage.removeItem(KEY); } catch {}
+  try { await AsyncStorage.removeItem(K()); } catch {}
 }
 
-// Mark a level as completed and unlock the next one (up to 15).
 export async function completeLevel(levelNumber) {
   try {
     const current = await loadStats();
@@ -123,9 +116,16 @@ export async function completeLevel(levelNumber) {
     set.add(levelNumber);
     next.completedLevels = Array.from(set);
     next.maxUnlockedLevel = Math.min(15, Math.max(current.maxUnlockedLevel || 1, levelNumber + 1));
-    await AsyncStorage.setItem(KEY, JSON.stringify(next));
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
     return next;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
+}
+
+// Overwrite the current user's stats with a snapshot (used by syncDown).
+export async function replaceStats(snapshot) {
+  try {
+    const next = { ...DEFAULTS, ...(snapshot || {}) };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
 }

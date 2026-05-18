@@ -5,7 +5,7 @@ import { useSettings } from '../utils/settings';
 import { useTheme, THEMES } from '../utils/theme';
 import { resetStats } from '../utils/storage';
 import { useAuth } from '../utils/auth';
-import { signOut } from '../utils/supabase';
+import { signOut, deleteUserStats } from '../utils/supabase';
 import { CommonActions } from '@react-navigation/native';
 
 function Row({ icon, title, subtitle, right }) {
@@ -35,7 +35,11 @@ export default function SettingsScreen({ navigation }) {
         {
           text: t('reset_stats'),
           style: 'destructive',
-          onPress: async () => { await resetStats(); Alert.alert(t('done'), ''); },
+          onPress: async () => {
+            await resetStats();
+            if (user) await deleteUserStats(user.id);
+            Alert.alert(t('done'), '');
+          },
         },
       ],
     );
