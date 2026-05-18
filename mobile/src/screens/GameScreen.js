@@ -45,7 +45,10 @@ function pickLine(trigger, language, vars) {
 export default function GameScreen({ navigation, route }) {
   const { settings } = useSettings();
   const theme = useTheme();
-  const { playerStats, sessionStats, difficulty, level, levelNumber = 0 } = route.params;
+  const {
+    playerStats, sessionStats, difficulty, level, levelNumber = 0,
+    isDaily = false, dailyPointsPerWord = 500,
+  } = route.params;
   const [selected, setSelected] = useState([]); // [{r,c,letter}]
   const [foundCells, setFoundCells] = useState([]);
   const [foundWords, setFoundWords] = useState([]);
@@ -223,9 +226,19 @@ export default function GameScreen({ navigation, route }) {
     const effectiveStreak = streakValue + 1;
     const multiplier =
       effectiveStreak >= 6 ? 3 : effectiveStreak >= 4 ? 2 : effectiveStreak >= 2 ? 1.5 : 1;
-    const basePoints = upper.length * 10;
-    const timeBonus = Math.floor(timeLeftSec / 10) * 5;
-    const totalPoints = Math.floor((basePoints + timeBonus) * multiplier);
+    // Daily challenge: flat reward per word (no combo, no time bonus).
+    let basePoints;
+    let timeBonus;
+    let totalPoints;
+    if (isDaily) {
+      basePoints = dailyPointsPerWord;
+      timeBonus = 0;
+      totalPoints = dailyPointsPerWord;
+    } else {
+      basePoints = upper.length * 10;
+      timeBonus = Math.floor(timeLeftSec / 10) * 5;
+      totalPoints = Math.floor((basePoints + timeBonus) * multiplier);
+    }
     return {
       isValid: true, alreadyFound: false, pointsEarned: totalPoints,
       newScore: currentScore + totalPoints,
@@ -468,6 +481,7 @@ export default function GameScreen({ navigation, route }) {
         hintsUsed: hintsUsedThisRound,
         timeSpent: Math.max(0, difficulty.timeLimit - timeLeft),
         levelNumber,
+        isDaily,
       },
     });
   }

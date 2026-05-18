@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { roundComplete } from '../utils/api';
-import { saveStats, logRound, completeLevel } from '../utils/storage';
+import { saveStats, logRound, completeLevel, markDailyAttempt } from '../utils/storage';
 import { useSettings } from '../utils/settings';
 import { useAuth } from '../utils/auth';
 import Confetti from '../components/Confetti';
@@ -49,16 +49,19 @@ export default function RoundCompleteScreen({ navigation, route }) {
         const allBadges = [...(sessionStats.badges || []), ...(res.result.badges || [])];
         sessionStats.badges = allBadges;
       }
+      // Daily challenge with incomplete attempt → don't credit any score.
+      const isDailyFail = roundResult.isDaily && roundResult.wordsFound !== roundResult.totalWords;
       await saveStats({
-        highScore: sessionStats.score,
-        bestStreak: Math.max(sessionStats.bestStreak || 0, sessionStats.streak || 0),
+        highScore: isDailyFail ? 0 : sessionStats.score,
+        bestStreak: isDailyFail ? 0 : Math.max(sessionStats.bestStreak || 0, sessionStats.streak || 0),
       });
       await logRound({
         category: roundResult.category || '',
         wordsFound: roundResult.wordsFound,
         totalWords: roundResult.totalWords,
         timeSpent: roundResult.timeSpent || 0,
-        roundScore: roundResult.roundScore || 0,
+        // Failed daily challenge contributes 0 to lifetime totals.
+        roundScore: isDailyFail ? 0 : (roundResult.roundScore || 0),
         perfect: roundResult.wordsFound === roundResult.totalWords,
         hintsUsed: roundResult.hintsUsed || 0,
       });
@@ -66,6 +69,10 @@ export default function RoundCompleteScreen({ navigation, route }) {
       // unlock the next level.
       if (roundResult.levelNumber > 0 && roundResult.wordsFound === roundResult.totalWords) {
         await completeLevel(roundResult.levelNumber);
+      }
+      // Daily challenge: always mark as attempted (locks for 12 h).
+      if (roundResult.isDaily) {
+        await markDailyAttempt();
       }
       // Push the latest local stats up to Supabase (no-op if not logged in).
       syncUp().catch(() => {});
@@ -75,9 +82,14 @@ export default function RoundCompleteScreen({ navigation, route }) {
 
   const { wordsFound, totalWords, timeLeft, roundScore } = roundResult;
   const ratio = totalWords > 0 ? wordsFound / totalWords : 0;
-  // Star tier: 3 perfect / 2 good / 1 ok / 0 failed.
-  const stars = ratio === 1 ? 3 : ratio >= 0.66 ? 2 : ratio >= 0.34 ? 1 : 0;
+  // Daily challenge is pass/fail — partial completion = failed, score = 0.
+  // Normal rounds use the 3-tier star system.
+  const isDailyRound = !!roundResult.isDaily;
+  const stars = isDailyRound
+    ? (ratio === 1 ? 3 : 0)
+    : (ratio === 1 ? 3 : ratio >= 0.66 ? 2 : ratio >= 0.34 ? 1 : 0);
   const isFailed = stars === 0;
+  const effectiveScore = isDailyRound && isFailed ? 0 : roundScore;
   const heroTitle = isFailed ? 'FAILED' : 'LEVEL COMPLETED';
   const heroSub = isFailed
     ? 'Agli baar aur behtar! 💔'
@@ -159,7 +171,7 @@ export default function RoundCompleteScreen({ navigation, route }) {
                 },
               ]}
             >
-              {isFailed ? '+0' : `+${roundScore}`}
+              {isFailed ? '+0' : `+${effectiveScore}`}
             </Animated.Text>
             <Text style={styles.heroScoreLabel}>points earned</Text>
           </Animated.View>
