@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../utils/theme';
 import { useSettings } from '../utils/settings';
 import { generateQuiz } from '../utils/api';
-import { loadStats, rememberQuizTopic } from '../utils/storage';
+import { loadStats, rememberQuizTopic, rememberQuizQuestions } from '../utils/storage';
 
 export default function QuizScreen({ navigation }) {
   const theme = useTheme();
@@ -22,11 +22,17 @@ export default function QuizScreen({ navigation }) {
   useEffect(() => {
     (async () => {
       const s = await loadStats();
-      const recent = s.recentQuizTopics || [];
-      const res = await generateQuiz({ count: 8, difficulty: 'medium', excludeTopics: recent });
+      const recentTopics = s.recentQuizTopics || [];
+      const recentQs = s.recentQuizQuestions || [];
+      const res = await generateQuiz({
+        count: 8, difficulty: 'medium',
+        excludeTopics: recentTopics,
+        excludeQuestions: recentQs.slice(0, 24),
+      });
       if (res?.ok && res.result?.questions?.length) {
         setQuiz(res.result);
         if (res.result.topic) rememberQuizTopic(res.result.topic);
+        rememberQuizQuestions(res.result.questions.map((q) => q.question));
       }
       setLoading(false);
       Animated.timing(fade, { toValue: 1, duration: 400, useNativeDriver: true }).start();

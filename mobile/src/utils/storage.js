@@ -35,6 +35,8 @@ const DEFAULTS = {
   lastAdaptiveStats: null,
   // Last 6 quiz topics, so the next quiz doesn't repeat.
   recentQuizTopics: [],
+  // Recently shown quiz question texts (last 40) to avoid duplicates.
+  recentQuizQuestions: [],
 };
 
 function todayKey() {
@@ -127,6 +129,18 @@ export async function rememberQuizTopic(topic) {
     const current = await loadStats();
     const list = [topic, ...(current.recentQuizTopics || []).filter((t) => t !== topic)].slice(0, 6);
     const next = { ...current, recentQuizTopics: list };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
+}
+
+export async function rememberQuizQuestions(questions) {
+  if (!Array.isArray(questions) || !questions.length) return;
+  try {
+    const current = await loadStats();
+    const incoming = questions.map((q) => String(q));
+    const dedup = Array.from(new Set([...incoming, ...(current.recentQuizQuestions || [])])).slice(0, 40);
+    const next = { ...current, recentQuizQuestions: dedup };
     await AsyncStorage.setItem(K(), JSON.stringify(next));
     return next;
   } catch { return null; }
