@@ -22,11 +22,9 @@ const DIRECTIONS = {
   diagonalDR: { dr: 1, dc: 1 },
   diagonalDL: { dr: 1, dc: -1 },
 };
-function pickDirections(difficulty) {
-  // All difficulties now include diagonals so the player sees the full grid
-  // variety; medium / hard add the second diagonal for extra challenge.
-  if (difficulty === 'easy') return ['horizontal', 'vertical', 'diagonalDR'];
-  if (difficulty === 'medium') return ['horizontal', 'vertical', 'diagonalDR', 'diagonalDL'];
+function pickDirections() {
+  // Every difficulty offers all 4 placement directions (H, V, ↘, ↙) so
+  // diagonal words show up regardless of level.
   return ['horizontal', 'vertical', 'diagonalDR', 'diagonalDL'];
 }
 
@@ -180,7 +178,7 @@ Return ONLY this JSON (no markdown, no commentary):
     throw new Error('No words available even with emergency fallback');
   }
 
-  const allowedDirs = pickDirections(difficulty);
+  const allowedDirs = pickDirections();
   const { grid, positions } = safeBuildGrid(chosenWords, gridSize, allowedDirs);
 
   return {

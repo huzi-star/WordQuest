@@ -369,6 +369,25 @@ export default function GameScreen({ navigation, route }) {
     if (target) attemptValidation(next);
   }
 
+  // Replace the entire selection with a straight line (called by WordGrid
+   // while the player drags). Diagonal-friendly. Auto-validates once the
+   // letters spell out a target word.
+  function onLineUpdate(cells) {
+    if (!cells || !cells.length) return;
+    setSelected(cells);
+    selectedRef.current = cells;
+    const attempt = cells.map((s) => s.letter).join('');
+    if (wordList.includes(attempt)) {
+      attemptValidation(cells);
+      return;
+    }
+    // Also try reverse direction (some words placed right-to-left in diagonals).
+    const reversed = [...cells].reverse().map((s) => s.letter).join('');
+    if (wordList.includes(reversed)) {
+      attemptValidation([...cells].reverse());
+    }
+  }
+
   function onSelectionEnd(wasDrag) {
     const current = selectedRef.current;
     if (!wasDrag || current.length < 2) return;
@@ -504,6 +523,7 @@ export default function GameScreen({ navigation, route }) {
           grid={level.grid}
           onCellEnter={onCellEnter}
           onSelectionEnd={onSelectionEnd}
+          onLineUpdate={onLineUpdate}
           selectedCells={selected}
           foundCells={foundCells}
           justFoundCells={justFoundCells}

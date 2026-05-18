@@ -70,6 +70,7 @@ export default function WordGrid({
   grid = [],
   onCellEnter,
   onSelectionEnd,
+  onLineUpdate,
   selectedCells = [],
   foundCells = [],
   justFoundCells = [],
@@ -83,10 +84,12 @@ export default function WordGrid({
   const gridRef = useRef(null);
   const originRef = useRef({ x: 0, y: 0 });
   const lastCellRef = useRef(null);
+  const startCellRef = useRef(null);
+  const draggingRef = useRef(false);
   const gestureCountRef = useRef(0);
 
   const propsRef = useRef({});
-  propsRef.current = { grid, onCellEnter, onSelectionEnd, CELL_WITH_MARGIN };
+  propsRef.current = { grid, onCellEnter, onSelectionEnd, onLineUpdate, CELL_WITH_MARGIN };
 
   const measure = () => {
     if (gridRef.current && gridRef.current.measure) {
@@ -111,6 +114,33 @@ export default function WordGrid({
     return { r, c, letter: g[r][c] };
   };
 
+  // Compute the straight-line path of cells from `start` to `end`.
+  // Returns null if the two cells aren't on a horizontal, vertical, or
+  // perfect diagonal line.
+  const straightLine = (start, end) => {
+    const g = propsRef.current.grid;
+    if (!start || !end || !g || !g.length) return null;
+    const rowDiff = Math.abs(end.r - start.r);
+    const colDiff = Math.abs(end.c - start.c);
+    if (rowDiff === 0 && colDiff === 0) {
+      return [{ r: start.r, c: start.c, letter: g[start.r][start.c] }];
+    }
+    const isStraight = rowDiff === 0 || colDiff === 0 || rowDiff === colDiff;
+    if (!isStraight) return null;
+    const steps = Math.max(rowDiff, colDiff);
+    const dr = Math.sign(end.r - start.r);
+    const dc = Math.sign(end.c - start.c);
+    const cells = [];
+    for (let i = 0; i <= steps; i++) {
+      const r = start.r + dr * i;
+      const c = start.c + dc * i;
+      if (r < 0 || r >= g.length || c < 0 || c >= g[0].length) return null;
+      cells.push({ r, c, letter: g[r][c] });
+    }
+    return cells;
+  };
+
+  // Tap-handler: append one cell. Used when the gesture is a tap (no drag).
   const touchHandler = (evt) => {
     const cell = pointToCell(evt);
     if (!cell) return;
@@ -123,6 +153,25 @@ export default function WordGrid({
     }
   };
 
+  // Drag-handler: while the finger is moving, replace the selection with
+  // the straight line from the anchor cell to the current cell. This is
+  // what makes diagonal drag actually work.
+  const dragHandler = (evt) => {
+    const cell = pointToCell(evt);
+    if (!cell || !startCellRef.current) return;
+    const start = startCellRef.current;
+    // Detect when the finger has moved off the anchor cell — only then
+    // do we treat it as a drag.
+    if (cell.r !== start.r || cell.c !== start.c) {
+      draggingRef.current = true;
+    }
+    if (!draggingRef.current) return;
+    const line = straightLine(start, cell);
+    if (line && propsRef.current.onLineUpdate) {
+      propsRef.current.onLineUpdate(line);
+    }
+  };
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -130,19 +179,27 @@ export default function WordGrid({
       onPanResponderGrant: (evt) => {
         gestureCountRef.current = 0;
         lastCellRef.current = null;
+        draggingRef.current = false;
         measure();
+        const startCell = pointToCell(evt);
+        startCellRef.current = startCell;
+        // Single-cell tap path also fires onCellEnter so tap-to-add still works.
         touchHandler(evt);
       },
-      onPanResponderMove: (evt) => touchHandler(evt),
+      onPanResponderMove: (evt) => dragHandler(evt),
       onPanResponderRelease: () => {
-        const wasDrag = gestureCountRef.current > 1;
+        const wasDrag = draggingRef.current;
         lastCellRef.current = null;
+        startCellRef.current = null;
+        draggingRef.current = false;
         if (propsRef.current.onSelectionEnd) {
           propsRef.current.onSelectionEnd(wasDrag);
         }
       },
       onPanResponderTerminate: () => {
         lastCellRef.current = null;
+        startCellRef.current = null;
+        draggingRef.current = false;
       },
     })
   ).current;
