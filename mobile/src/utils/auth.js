@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase, supabaseConfigured, onAuthChange, getCurrentUser, fetchStats, upsertStats } from './supabase';
 import { loadStats, replaceStats, setStatsUserScope } from './storage';
 import { setSettingsUserScope, useSettings } from './settings';
@@ -56,9 +56,10 @@ export function AuthProvider({ children }) {
     const remote = await fetchStats(user.id);
     if (!remote) return null;
 
-    // Build the new local snapshot directly from the cloud row — do NOT
-    // merge with whatever was sitting in AsyncStorage, otherwise a previous
-    // account's numbers could leak in.
+    // Preserve device-local fields (adaptive resume + quiz dedupe history)
+    // — these are not stored in Supabase and would be lost if we wiped them.
+    const localCurrent = await loadStats();
+
     const snapshot = {
       highScore: remote.high_score || 0,
       bestStreak: remote.best_streak || 0,
@@ -74,10 +75,13 @@ export function AuthProvider({ children }) {
       categoryStats: remote.category_stats || {},
       recentScores: remote.recent_scores || [],
       activeDays: remote.active_days || {},
+      // Local-only:
+      lastAdaptiveStats: localCurrent.lastAdaptiveStats || null,
+      recentQuizTopics: localCurrent.recentQuizTopics || [],
+      recentQuizQuestions: localCurrent.recentQuizQuestions || [],
     };
     await replaceStats(snapshot);
 
-    // Apply server-saved preferences (theme / language / sound / vibration).
     if (remote.preferences && typeof remote.preferences === 'object') {
       await applyServer(remote.preferences);
     }
@@ -90,8 +94,18 @@ export function AuthProvider({ children }) {
     await upsertStats(user.id, local, settings);
   }
 
-  // After user signs in, pull cloud snapshot into local storage.
-  useEffect(() => { if (user) { syncDown(); } }, [user]);
+  // After user IDENTITY changes (login / switch), pull cloud snapshot.
+  // We use a ref so settings-driven re-renders don't accidentally retrigger
+  // a syncDown that would wipe local-only state like lastAdaptiveStats.
+  const lastSyncedUserId = useRef(null);
+  useEffect(() => {
+    if (user && user.id !== lastSyncedUserId.current) {
+      lastSyncedUserId.current = user.id;
+      syncDown();
+    } else if (!user) {
+      lastSyncedUserId.current = null;
+    }
+  }, [user]);
 
   // Whenever the user changes a setting, push to cloud (best-effort).
   useEffect(() => {

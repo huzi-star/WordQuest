@@ -62,7 +62,7 @@ function dedupeLevel(level) {
 function configFromLevelNumber(n) {
   if (n <= 5) return { difficulty: 'easy', gridSize: 6, wordCount: 3 + Math.min(2, n - 1), timeLimit: 90 };
   if (n <= 10) return { difficulty: 'medium', gridSize: 8, wordCount: 5 + Math.min(2, n - 6), timeLimit: 75 };
-  return { difficulty: 'hard', gridSize: 10, wordCount: 7 + Math.min(2, n - 11), timeLimit: 65 };
+  return { difficulty: 'hard', gridSize: 10, wordCount: 7 + Math.min(2, n - 11), timeLimit: 75 };
 }
 
 app.post('/api/generate-level', async (req, res) => {

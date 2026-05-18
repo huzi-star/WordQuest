@@ -8,7 +8,7 @@
 const DIFFICULTY_CONFIG = {
   easy:   { difficulty: 'easy',   timeLimit: 90, wordCount: 4, gridSize: 6 },
   medium: { difficulty: 'medium', timeLimit: 75, wordCount: 6, gridSize: 8 },
-  hard:   { difficulty: 'hard',   timeLimit: 60, wordCount: 8, gridSize: 12 },
+  hard:   { difficulty: 'hard',   timeLimit: 75, wordCount: 8, gridSize: 12 },
 };
 
 function difficultyAgent(playerStats = {}) {
