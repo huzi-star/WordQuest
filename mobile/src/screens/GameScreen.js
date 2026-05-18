@@ -462,17 +462,24 @@ export default function GameScreen({ navigation, route }) {
   const currentSelection = selected.map(s => s.letter).join('');
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.topBar}>
-        <Text style={styles.scoreText}>💰 {score}</Text>
-        <Timer
-          timeLimit={difficulty.timeLimit}
-          onTimeUp={onTimeUp}
-          onTick={onTick}
-          paused={paused}
-        />
-        <View style={styles.streakWrap}>
-          <Text style={styles.streakText}>🔥 {streak}</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+      <View style={[styles.topBar, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.topCol}>
+          <Text style={styles.topLabel}>SCORE</Text>
+          <Text style={[styles.scoreText, { color: theme.accent }]}>💰 {score}</Text>
+        </View>
+        <View style={styles.topCol}>
+          <Text style={styles.topLabel}>TIME</Text>
+          <Timer
+            timeLimit={difficulty.timeLimit}
+            onTimeUp={onTimeUp}
+            onTick={onTick}
+            paused={paused}
+          />
+        </View>
+        <View style={styles.topCol}>
+          <Text style={styles.topLabel}>STREAK</Text>
+          <Text style={[styles.streakText, { color: theme.gold }]}>🔥 {streak}</Text>
           {streak >= 2 ? (
             <Text style={styles.comboText}>
               ⚡ {streak >= 6 ? '3x' : streak >= 4 ? '2x' : '1.5x'}
@@ -482,8 +489,14 @@ export default function GameScreen({ navigation, route }) {
       </View>
 
       <View style={styles.categoryRow}>
-        <Text style={styles.category}>{level.categoryEmoji} {level.category}</Text>
-        <Text style={styles.roundText}>Round #{sessionStats.round}</Text>
+        <View style={[styles.categoryPill, { backgroundColor: theme.card, borderColor: theme.accent }]}>
+          <Text style={[styles.category, { color: theme.accent }]}>
+            {level.categoryEmoji} {level.category}
+          </Text>
+        </View>
+        <View style={[styles.roundPill, { borderColor: theme.border }]}>
+          <Text style={styles.roundText}>Round #{sessionStats.round}</Text>
+        </View>
       </View>
 
       <Animated.View style={{ transform: [{ translateX: shake }] }}>
@@ -503,20 +516,27 @@ export default function GameScreen({ navigation, route }) {
 
       <View style={styles.actions}>
         <TouchableOpacity
-          style={[styles.btn, styles.hintBtn, hintsLeft <= 0 && { opacity: 0.5 }]}
+          style={[
+            styles.btn,
+            { backgroundColor: `${theme.gold}1f`, borderColor: theme.gold, borderWidth: 1 },
+            hintsLeft <= 0 && { opacity: 0.4 },
+          ]}
           onPress={useHint}
           disabled={hintsLeft <= 0}
         >
-          <Text style={styles.btnText}>💡 Hint ({hintsLeft})</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.btn, styles.clearBtn]} onPress={clearSelection}>
-          <Text style={styles.btnText}>✕ Clear</Text>
+          <Text style={[styles.btnText, { color: theme.gold }]}>💡 Hint ({hintsLeft})</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.btn, styles.quitBtn]}
+          style={[styles.btn, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}
+          onPress={clearSelection}
+        >
+          <Text style={[styles.btnText, { color: '#cbd5e1' }]}>✕ Clear</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.btn, { backgroundColor: '#7f1d1d', borderColor: '#ef4444', borderWidth: 1 }]}
           onPress={() => navigation.replace('GameOver', { sessionStats: { ...sessionStats, score, streak } })}
         >
-          <Text style={styles.btnText}>Quit</Text>
+          <Text style={[styles.btnText, { color: '#fecaca' }]}>Quit</Text>
         </TouchableOpacity>
       </View>
 
@@ -532,19 +552,24 @@ export default function GameScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', padding: 12 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1e293b', borderRadius: 12, padding: 12 },
-  scoreText: { color: '#22c55e', fontSize: 18, fontWeight: 'bold' },
-  streakText: { color: '#eab308', fontSize: 18, fontWeight: 'bold' },
-  streakWrap: { alignItems: 'flex-end' },
-  comboText: { color: '#f97316', fontSize: 11, fontWeight: '900', marginTop: 2 },
-  categoryRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 10 },
-  category: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  roundText: { color: '#94a3b8' },
-  actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  btn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginHorizontal: 4 },
-  clearBtn: { backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#334155' },
-  quitBtn: { backgroundColor: '#ef4444' },
-  hintBtn: { backgroundColor: '#7c2d12', borderWidth: 1, borderColor: '#fb923c' },
-  btnText: { color: '#fff', fontWeight: 'bold' },
+  container: { flex: 1, padding: 12 },
+  topBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around',
+    borderRadius: 16, paddingVertical: 12, paddingHorizontal: 12, borderWidth: 1,
+  },
+  topCol: { alignItems: 'center', flex: 1 },
+  topLabel: { color: '#64748b', fontSize: 9, fontWeight: '900', letterSpacing: 1.2, marginBottom: 2 },
+  scoreText: { fontSize: 18, fontWeight: '900' },
+  streakText: { fontSize: 18, fontWeight: '900' },
+  comboText: { color: '#f97316', fontSize: 10, fontWeight: '900', marginTop: 1 },
+
+  categoryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 10 },
+  categoryPill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, borderWidth: 1 },
+  category: { fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
+  roundPill: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10, borderWidth: 1 },
+  roundText: { color: '#94a3b8', fontSize: 11, fontWeight: '700' },
+
+  actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, gap: 8 },
+  btn: { flex: 1, paddingVertical: 13, borderRadius: 14, alignItems: 'center' },
+  btnText: { fontWeight: '900', fontSize: 13 },
 });
