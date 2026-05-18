@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View, Text, Dimensions } from 'react-native';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const EMOJIS = ['🎉', '✨', '⭐', '💫', '🎊', '🏆', '🇵🇰'];
+const EMOJIS = ['🎉', '✨', '⭐', '💫', '🎊', '🏆', '🇵🇰', '🥳', '🪅', '🎈', '🌟', '💚', '🎆'];
 
 function Particle({ delay }) {
   const fall = useRef(new Animated.Value(0)).current;
@@ -14,7 +14,7 @@ function Particle({ delay }) {
   useEffect(() => {
     Animated.timing(fall, {
       toValue: 1,
-      duration: 2500 + Math.random() * 1500,
+      duration: 1800 + Math.random() * 600, // ~2 - 2.5s total
       delay,
       easing: Easing.in(Easing.quad),
       useNativeDriver: true,
@@ -43,12 +43,12 @@ function Particle({ delay }) {
   );
 }
 
-export default function Confetti({ visible, count = 30, onDone }) {
+export default function Confetti({ visible, count = 40, duration = 2400, onDone }) {
   const seedRef = useRef(0);
   useEffect(() => {
     if (visible) {
       seedRef.current += 1;
-      const t = setTimeout(() => onDone && onDone(), 3500);
+      const t = setTimeout(() => onDone && onDone(), duration);
       return () => clearTimeout(t);
     }
   }, [visible]);

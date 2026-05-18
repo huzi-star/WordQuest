@@ -31,6 +31,10 @@ const DEFAULTS = {
   achievements: [],
   maxUnlockedLevel: 1,
   completedLevels: [],
+  // Adaptive resume — picks up where the player left off.
+  lastAdaptiveStats: null,
+  // Last 6 quiz topics, so the next quiz doesn't repeat.
+  recentQuizTopics: [],
 };
 
 function todayKey() {
@@ -106,6 +110,26 @@ export async function logGameOver({ finalScore = 0, finalStreak = 0 }) {
 // Reset stats for the CURRENTLY active user scope only.
 export async function resetStats() {
   try { await AsyncStorage.removeItem(K()); } catch {}
+}
+
+export async function setLastAdaptiveStats(stats) {
+  try {
+    const current = await loadStats();
+    const next = { ...current, lastAdaptiveStats: stats };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
+}
+
+export async function rememberQuizTopic(topic) {
+  if (!topic) return;
+  try {
+    const current = await loadStats();
+    const list = [topic, ...(current.recentQuizTopics || []).filter((t) => t !== topic)].slice(0, 6);
+    const next = { ...current, recentQuizTopics: list };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
 }
 
 export async function completeLevel(levelNumber) {

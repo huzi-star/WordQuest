@@ -8,13 +8,17 @@ import { roundComplete } from '../utils/api';
 import { saveStats, logRound, completeLevel } from '../utils/storage';
 import { useSettings } from '../utils/settings';
 import { useAuth } from '../utils/auth';
+import Confetti from '../components/Confetti';
+import { useTheme } from '../utils/theme';
 
 export default function RoundCompleteScreen({ navigation, route }) {
   const { t } = useSettings();
   const { syncUp } = useAuth();
+  const theme = useTheme();
   const { playerStats, sessionStats, roundResult, level } = route.params;
   const [loading, setLoading] = useState(true);
   const [reward, setReward] = useState(null);
+  const [showConfetti, setShowConfetti] = useState(true);
 
   const fadeIn = useRef(new Animated.Value(0)).current;
   const heroScale = useRef(new Animated.Value(0.7)).current;
@@ -78,8 +82,9 @@ export default function RoundCompleteScreen({ navigation, route }) {
   const accent = isPerfect ? '#22c55e' : ratio >= 0.5 ? '#fcd34d' : '#fb923c';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <View style={[styles.blob, { backgroundColor: accent, top: -100, right: -80 }]} />
+      <Confetti visible={showConfetti} count={40} duration={2400} onDone={() => setShowConfetti(false)} />
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Hero */}
@@ -137,21 +142,6 @@ export default function RoundCompleteScreen({ navigation, route }) {
             </View>
           ) : (
             <>
-              {/* Badges */}
-              {reward?.badges?.length ? (
-                <View style={[styles.card, styles.badgeCard]}>
-                  <Text style={styles.sectionTitle}>🏅 BADGES EARNED</Text>
-                  <View style={{ gap: 8, marginTop: 8 }}>
-                    {reward.badges.map((b) => (
-                      <View key={b.id} style={styles.badgeItem}>
-                        <Text style={styles.badgeName}>{b.name}</Text>
-                        <Text style={styles.badgeMsg}>{b.message}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              ) : null}
-
               {/* Encouragement */}
               {reward?.encouragement ? (
                 <View style={[styles.card, styles.encourageCard]}>

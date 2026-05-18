@@ -23,8 +23,10 @@ const DIRECTIONS = {
   diagonalDL: { dr: 1, dc: -1 },
 };
 function pickDirections(difficulty) {
-  if (difficulty === 'easy') return ['horizontal', 'vertical'];
-  if (difficulty === 'medium') return ['horizontal', 'vertical', 'diagonalDR'];
+  // All difficulties now include diagonals so the player sees the full grid
+  // variety; medium / hard add the second diagonal for extra challenge.
+  if (difficulty === 'easy') return ['horizontal', 'vertical', 'diagonalDR'];
+  if (difficulty === 'medium') return ['horizontal', 'vertical', 'diagonalDR', 'diagonalDL'];
   return ['horizontal', 'vertical', 'diagonalDR', 'diagonalDL'];
 }
 

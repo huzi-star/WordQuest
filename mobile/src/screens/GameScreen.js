@@ -7,12 +7,44 @@ import Timer from '../components/Timer';
 import AgentThinking from '../components/AgentThinking';
 import ScorePopup from '../components/ScorePopup';
 import Confetti from '../components/Confetti';
-import { validateWord, explainWord, getCommentary } from '../utils/api';
+import { validateWord, explainWord } from '../utils/api';
 import { playDing, initSound } from '../utils/sound';
 import { useSettings } from '../utils/settings';
+import { useTheme } from '../utils/theme';
+
+// Local commentary templates — INSTANT, no network round-trip. Backend
+// commentary is still available but caused lag + stacking so we drive the
+// in-game agent bubble from these templates directly.
+const COMMENTARY = {
+  english: {
+    word_found: ['Nice find!', 'Sharp eyes!', 'Another one!', 'Locked in!', 'Spotted it!'],
+    streak:     ['{streak} in a row — on fire!', 'Streak {streak}! Multiplier on.', 'Combo {streak}!'],
+    half_time:  ['Half time — {wordsFound}/{totalWords}. Push it!', 'Halfway done — focus.'],
+    low_time:   ['Only {timeLeft}s — grab anything!', 'Final stretch — hurry!'],
+    idle:       ['Check the diagonals too.', 'Try a rare letter as the start.', 'Stuck? A hint costs 30.'],
+    gold:       ['Gold cell! Double points.', 'Bonus square hit!'],
+    perfect_round: ['Perfect round! All words found.'],
+  },
+  urdu: {
+    word_found: ['Sahi!', 'Wah!', 'Acha kaam!', 'Ek aur!', 'Keep going!'],
+    streak:     ['{streak} in a row — fire pe ho!', 'Streak {streak}! Combo active.', 'Combo {streak} — kamaal!'],
+    half_time:  ['Half time — {wordsFound}/{totalWords}. Speed up!', 'Aadha time gaya — focus.'],
+    low_time:   ['Sirf {timeLeft}s baqi — jaldi!', 'Final stretch — hurry!'],
+    idle:       ['Diagonals bhi try karo.', 'Rare letter se shuru karo.', 'Stuck? Hint sirf 30 ka hai.'],
+    gold:       ['Gold cell! Double points.', 'Bonus square mil gaya!'],
+    perfect_round: ['Perfect round! Sab mil gaye.'],
+  },
+};
+function pickLine(trigger, language, vars) {
+  const lang = language === 'english' ? 'english' : 'urdu';
+  const pool = COMMENTARY[lang][trigger] || COMMENTARY[lang].word_found;
+  const tpl = pool[Math.floor(Math.random() * pool.length)];
+  return tpl.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? vars[k] : ''));
+}
 
 export default function GameScreen({ navigation, route }) {
   const { settings } = useSettings();
+  const theme = useTheme();
   const { playerStats, sessionStats, difficulty, level, levelNumber = 0 } = route.params;
   const [selected, setSelected] = useState([]); // [{r,c,letter}]
   const [foundCells, setFoundCells] = useState([]);
@@ -51,19 +83,16 @@ export default function GameScreen({ navigation, route }) {
   const firedRef = useRef({ halfTime: false, lowTime: false, lastIdleAt: Date.now(), lastStreak: 0 });
 
   function maybeFireCommentary(trigger) {
-    getCommentary({
-      trigger,
-      category: level.category,
+    // Local + instant — no network. AgentThinking handles dedupe / replace.
+    const vars = {
       wordsFound: foundWords.length,
       totalWords: wordList.length,
       timeLeft: timeLeftRef.current,
       timeLimit: difficulty.timeLimit,
       streak,
-    }).then((res) => {
-      if (res?.ok && res.result?.comment) {
-        showAgent(`🎙 ${res.result.comment}`, 3800);
-      }
-    });
+    };
+    const line = pickLine(trigger, settings.language, vars);
+    if (line) showAgent(`🎙 ${line}`, 2400);
   }
 
   function onTick(t) {
@@ -256,35 +285,30 @@ export default function GameScreen({ navigation, route }) {
       const popupColor = hitsGold ? '#fcd34d' : isCombo ? '#fb923c' : mult >= 2 ? '#eab308' : '#22c55e';
       spawnPopup(`+${totalEarned}${tags.length ? ' · ' + tags.join(' · ') : ''}`, 180, 360, popupColor);
 
-      // Every other word found, fire a commentary line (template fallback
-      // guarantees it shows even if Gemini is slow). Otherwise show the
-      // tutor explanation.
-      if (newFoundWords.length % 2 === 0) {
-        getCommentary({
-          trigger: 'word_found',
-          category: level.category,
-          wordsFound: newFoundWords.length,
-          totalWords: wordList.length,
-          timeLeft: timeLeftRef.current,
-          timeLimit: difficulty.timeLimit,
-          streak: streak + 1,
-        }).then((res) => {
-          const msg = res?.ok && res.result?.comment ? res.result.comment : r.message;
-          showAgent(`🎙 ${msg}`, 3600);
-        });
-      } else {
-        explainWord({
-          word: wordAttempt,
-          category: level.category,
-          funFact: level.funFact,
-        }).then((tutorRes) => {
-          if (tutorRes?.ok && tutorRes.result?.explanation) {
-            showAgent(`${r.message} • ${tutorRes.result.explanation}`, 5000);
-          } else {
-            showAgent(r.message);
-          }
-        });
-      }
+      // INSTANT feedback: show local commentary line right away, then the
+      // tutor explanation comes back later (no UI block).
+      const commentVars = {
+        wordsFound: newFoundWords.length,
+        totalWords: wordList.length,
+        timeLeft: timeLeftRef.current,
+        streak: streak + 1,
+      };
+      let triggerType = 'word_found';
+      if (hitsGold) triggerType = 'gold';
+      else if (newFoundWords.length === wordList.length) triggerType = 'perfect_round';
+      else if ((streak + 1) >= 3 && (streak + 1) % 2 === 1) triggerType = 'streak';
+      showAgent(`🎙 ${pickLine(triggerType, settings.language, commentVars)}`, 2200);
+
+      explainWord({
+        word: wordAttempt,
+        category: level.category,
+        funFact: level.funFact,
+      }).then((tutorRes) => {
+        if (tutorRes?.ok && tutorRes.result?.explanation) {
+          // Tutor arrives later — replace the bubble with the cultural fact.
+          showAgent(`📚 ${tutorRes.result.explanation}`, 3800);
+        }
+      });
 
       clearSelection();
 
@@ -359,8 +383,26 @@ export default function GameScreen({ navigation, route }) {
     }
   }
 
-  function goToRoundComplete(wordsFound, timeLeft, finalScore, finalStreak) {
+  async function goToRoundComplete(wordsFound, timeLeft, finalScore, finalStreak) {
     const roundNumber = sessionStats.round;
+    // Persist adaptive resume state so the next "Quick Play" picks up the
+    // difficulty curve where the player left off.
+    try {
+      const { setLastAdaptiveStats } = require('../utils/storage');
+      const newHistoryTmp = [
+        ...(sessionStats.history || []),
+        { wordsFound, totalWords: wordList.length, timeLeft },
+      ];
+      const avgW = newHistoryTmp.reduce((a, h) => a + h.wordsFound, 0) / newHistoryTmp.length;
+      const avgT = newHistoryTmp.reduce((a, h) => a + h.timeLeft, 0) / newHistoryTmp.length;
+      await setLastAdaptiveStats({
+        roundsPlayed: roundNumber,
+        avgWordsFound: avgW,
+        avgTimeLeft: avgT,
+        currentStreak: finalStreak,
+        lastCategory: level.category,
+      });
+    } catch {}
     const newHistory = [
       ...(sessionStats.history || []),
       {

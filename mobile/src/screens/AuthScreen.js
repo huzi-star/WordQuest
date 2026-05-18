@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../utils/theme';
@@ -17,6 +17,14 @@ export default function AuthScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [busy, setBusy] = useState(false);
+  const logoScale = React.useRef(new Animated.Value(0.7)).current;
+  const fadeIn = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.spring(logoScale, { toValue: 1, useNativeDriver: true, friction: 5 }),
+      Animated.timing(fadeIn, { toValue: 1, duration: 700, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
   async function submit() {
     if (!email || !password) {
@@ -71,15 +79,17 @@ export default function AuthScreen({ navigation }) {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <ScrollView contentContainerStyle={styles.scroll}>
-            <View style={styles.heroWrap}>
+            <Animated.View style={[styles.heroWrap, { opacity: fadeIn, transform: [{ scale: logoScale }] }]}>
               <View style={[styles.logoCircle, { borderColor: theme.accent, shadowColor: theme.accent }]}>
-                <Text style={styles.heroEmoji}>🎮</Text>
+                <Image source={require('../../app-logo.jpeg')} style={styles.logoImg} />
               </View>
               <Text style={styles.brand}>WordQuest</Text>
-              <Text style={styles.tag}>
-                {mode === 'login' ? 'Welcome back' : 'Create your account'}
-              </Text>
-            </View>
+              <View style={[styles.tagPill, { borderColor: theme.accent, backgroundColor: `${theme.accent}1a` }]}>
+                <Text style={[styles.tag, { color: theme.accent }]}>
+                  {mode === 'login' ? 'WELCOME BACK' : 'CREATE YOUR ACCOUNT'}
+                </Text>
+              </View>
+            </Animated.View>
 
             <View style={[styles.modeToggle, { borderColor: theme.border }]}>
               <TouchableOpacity
@@ -171,14 +181,17 @@ const styles = StyleSheet.create({
 
   heroWrap: { alignItems: 'center', marginTop: 24 },
   logoCircle: {
-    width: 100, height: 100, borderRadius: 50,
+    width: 120, height: 120, borderRadius: 60,
     backgroundColor: '#0b1220',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 0 },
+    borderWidth: 2,
+    shadowOpacity: 0.5, shadowRadius: 22, shadowOffset: { width: 0, height: 0 },
+    elevation: 12, overflow: 'hidden',
   },
-  heroEmoji: { fontSize: 50 },
-  brand: { color: '#fff', fontSize: 28, fontWeight: '900', marginTop: 8 },
-  tag: { color: '#94a3b8', marginTop: 4 },
+  logoImg: { width: 108, height: 108, borderRadius: 54 },
+  brand: { color: '#fff', fontSize: 32, fontWeight: '900', marginTop: 12, letterSpacing: 0.5 },
+  tagPill: { marginTop: 8, paddingHorizontal: 14, paddingVertical: 5, borderRadius: 16, borderWidth: 1 },
+  tag: { fontSize: 10, fontWeight: '800', letterSpacing: 1.8 },
 
   modeToggle: { flexDirection: 'row', padding: 4, borderRadius: 14, borderWidth: 1 },
   modeBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },

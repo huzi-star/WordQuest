@@ -72,7 +72,8 @@ export async function getCoach(stats) {
 
 export async function generateQuiz(payload) {
   try {
-    const { data } = await client.post('/api/generate-quiz', withLang(payload));
+    // payload may carry excludeTopics already; withLang preserves extras.
+    const { data } = await client.post('/api/generate-quiz', withLang(payload || {}));
     return data;
   } catch (err) {
     return { ok: false, error: err.message };

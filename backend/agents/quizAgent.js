@@ -42,13 +42,16 @@ function shuffleAndSlice(arr, n) {
   return c.slice(0, n);
 }
 
-async function tryGemini({ apiKey, topic, count, language, difficulty }) {
+async function tryGemini({ apiKey, topic, count, language, difficulty, excludeTopics = [] }) {
   const langInstruction = language === 'urdu'
     ? 'All questions, options and explanations in Roman Urdu mixed with English (Pakistani conversational style).'
     : 'All questions, options and explanations in clear English.';
+  const excludeHint = excludeTopics.length
+    ? `\nDO NOT pick these topics (already done recently): ${excludeTopics.join(', ')}.`
+    : '';
   const topicHint = topic
-    ? `Topic / theme: ${topic}.`
-    : 'Pick an interesting cultural / world topic (Pakistani, Indian, sports, science, history, mythology, anything).';
+    ? `Topic / theme: ${topic}.${excludeHint}`
+    : `Pick a fresh, interesting cultural / world topic — Pakistani, Indian, sports, science, history, mythology, food, art, anything. Be creative and varied.${excludeHint}`;
 
   const prompt = `You are a trivia quiz designer.
 
@@ -94,13 +97,13 @@ Return STRICTLY valid JSON only (no markdown):
   };
 }
 
-async function quizAgent({ topic = '', count = 8, language = 'english', difficulty = 'medium' }) {
+async function quizAgent({ topic = '', count = 8, language = 'english', difficulty = 'medium', excludeTopics = [] }) {
   const apiKey = process.env.GEMINI_API_KEY;
   const lang = language === 'urdu' ? 'urdu' : 'english';
 
   if (apiKey && apiKey !== 'your_key_here') {
     try {
-      return await tryGemini({ apiKey, topic, count, language: lang, difficulty });
+      return await tryGemini({ apiKey, topic, count, language: lang, difficulty, excludeTopics });
     } catch (err) {
       console.warn('[quizAgent] Gemini failed, falling back:', err.message);
     }

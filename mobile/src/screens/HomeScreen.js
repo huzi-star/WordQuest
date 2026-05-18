@@ -54,6 +54,7 @@ export default function HomeScreen({ navigation }) {
           totalScoreEver: s.totalScoreEver || 0,
           maxUnlockedLevel: s.maxUnlockedLevel || 1,
           completedLevels: s.completedLevels || [],
+          lastAdaptiveStats: s.lastAdaptiveStats || null,
         });
       })();
       return () => { cancelled = true; };
@@ -61,8 +62,12 @@ export default function HomeScreen({ navigation }) {
   );
 
   function startAdaptive() {
+    // Resume from where the player left off if any adaptive state exists.
+    const resumed = stats.lastAdaptiveStats || {
+      roundsPlayed: 0, avgWordsFound: 0, avgTimeLeft: 0, currentStreak: 0, lastCategory: '',
+    };
     navigation.navigate('Category', {
-      playerStats: { roundsPlayed: 0, avgWordsFound: 0, avgTimeLeft: 0, currentStreak: 0, lastCategory: '' },
+      playerStats: resumed,
       sessionStats: {
         score: 0, round: 1, streak: 0, badges: [], history: [],
         highScore: stats.highScore, bestStreak: stats.bestStreak,
