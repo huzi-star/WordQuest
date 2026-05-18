@@ -42,6 +42,9 @@ const DEFAULTS = {
   dailyChallengeLastAttemptAt: 0,
   // When the user last completed a quiz. Quiz mode re-unlocks 12 h later.
   quizLastAttemptAt: 0,
+  // Per-level cached word lists for Level Mode retry. Shape:
+  //   { [levelNumber]: { words, category, emoji, funFact } }
+  levelWordCache: {},
 };
 
 function todayKey() {
@@ -148,6 +151,31 @@ export async function rememberQuizQuestions(questions) {
     const next = { ...current, recentQuizQuestions: dedup };
     await AsyncStorage.setItem(K(), JSON.stringify(next));
     return next;
+  } catch { return null; }
+}
+
+export async function cacheLevelWords(levelNumber, { words, category, emoji, funFact }) {
+  if (!levelNumber || !Array.isArray(words) || !words.length) return null;
+  try {
+    const current = await loadStats();
+    const cache = { ...(current.levelWordCache || {}) };
+    cache[levelNumber] = {
+      words: words.map((w) => String(w).toUpperCase()),
+      category: category || '',
+      emoji: emoji || '',
+      funFact: funFact || '',
+    };
+    const next = { ...current, levelWordCache: cache };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
+}
+
+export async function getLevelWords(levelNumber) {
+  if (!levelNumber) return null;
+  try {
+    const current = await loadStats();
+    return (current.levelWordCache || {})[levelNumber] || null;
   } catch { return null; }
 }
 

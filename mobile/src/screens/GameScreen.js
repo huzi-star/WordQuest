@@ -81,6 +81,20 @@ export default function GameScreen({ navigation, route }) {
 
   useEffect(() => {
     initSound();
+    // Cache this level's word list so a failed Level Mode retry can request
+    // the same words from the backend (it just reshuffles the grid).
+    if (levelNumber > 0 && Array.isArray(level?.words) && level.words.length) {
+      try {
+        // eslint-disable-next-line global-require
+        const { cacheLevelWords } = require('../utils/storage');
+        cacheLevelWords(levelNumber, {
+          words: level.words,
+          category: level.category,
+          emoji: level.categoryEmoji,
+          funFact: level.funFact,
+        });
+      } catch {}
+    }
   }, []);
 
   // Track which milestones we've already commented on this round.

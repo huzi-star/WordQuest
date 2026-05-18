@@ -229,10 +229,44 @@ export default function RoundCompleteScreen({ navigation, route }) {
           <TouchableOpacity
             activeOpacity={0.9}
             style={[styles.primaryBtn, { shadowColor: accent }]}
-            onPress={() => navigation.replace('Category', { playerStats, sessionStats })}
+            onPress={async () => {
+              // FAILED LEVEL → retry the SAME level (same words, new grid).
+              if (isFailed && roundResult.levelNumber > 0) {
+                // eslint-disable-next-line global-require
+                const { getLevelWords } = require('../utils/storage');
+                const cached = await getLevelWords(roundResult.levelNumber);
+                navigation.replace('Category', {
+                  playerStats,
+                  sessionStats,
+                  levelNumber: roundResult.levelNumber,
+                  reshuffleWords: cached?.words || null,
+                  reshuffleCategory: cached?.category || '',
+                  reshuffleEmoji: cached?.emoji || '',
+                  reshuffleFunFact: cached?.funFact || '',
+                });
+                return;
+              }
+              // PASSED LEVEL → advance to next level number.
+              if (!isFailed && roundResult.levelNumber > 0) {
+                navigation.replace('Category', {
+                  playerStats,
+                  sessionStats,
+                  levelNumber: Math.min(15, roundResult.levelNumber + 1),
+                });
+                return;
+              }
+              // Quick Play / daily / etc → unchanged adaptive flow.
+              navigation.replace('Category', { playerStats, sessionStats });
+            }}
           >
-            <Text style={styles.primaryArrow}>▶</Text>
-            <Text style={styles.primaryText}>NEXT ROUND</Text>
+            <Text style={styles.primaryArrow}>{isFailed ? '↻' : '▶'}</Text>
+            <Text style={styles.primaryText}>
+              {isFailed && roundResult.levelNumber > 0
+                ? `RETRY LEVEL ${roundResult.levelNumber}`
+                : !isFailed && roundResult.levelNumber > 0
+                ? `NEXT LEVEL ${Math.min(15, roundResult.levelNumber + 1)}`
+                : 'NEXT ROUND'}
+            </Text>
           </TouchableOpacity>
 
           <View style={styles.secondaryRow}>

@@ -125,8 +125,34 @@ async function levelGeneratorAgent({
   levelNumber = 0,
   dailySeed = null,
   lastCategory = '',
+  // Level-Mode retry: caller passes the existing word list, we just reshuffle
+  // them onto a fresh grid (no Gemini call, no new category).
+  reshuffleWords = null,
+  reshuffleCategory = '',
+  reshuffleEmoji = '',
+  reshuffleFunFact = '',
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
+
+  // RESHUFFLE FAST-PATH — used by Level Mode retries.
+  if (Array.isArray(reshuffleWords) && reshuffleWords.length) {
+    const cleaned = Array.from(new Set(
+      reshuffleWords
+        .map((w) => String(w).toUpperCase().replace(/[^A-Z]/g, ''))
+        .filter((w) => w.length > 1 && w.length <= gridSize),
+    )).slice(0, wordCount);
+    const allowedDirs = pickDirections();
+    const { grid, positions } = safeBuildGrid(cleaned, gridSize, allowedDirs);
+    return {
+      category: reshuffleCategory || 'Word Quest',
+      categoryEmoji: reshuffleEmoji || '🔁',
+      words: positions.map((p) => p.word),
+      grid,
+      wordPositions: positions,
+      funFact: reshuffleFunFact || 'Same words, brand-new layout. Find them again!',
+      reshuffled: true,
+    };
+  }
   const maxLen = difficulty === 'easy' ? 6 : difficulty === 'medium' ? 8 : 10;
   const langInstruction = language === 'urdu'
     ? 'Write the funFact in Roman Urdu mixed with English (Pakistani conversational style), max 25 words.'

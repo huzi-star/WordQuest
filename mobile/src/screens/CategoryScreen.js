@@ -113,7 +113,10 @@ const diffEmoji = (d) => (d === 'easy' ? '🟢' : d === 'medium' ? '🟡' : '�
 export default function CategoryScreen({ navigation, route }) {
   const theme = useTheme();
   const { settings } = useSettings();
-  const { playerStats, sessionStats, levelNumber = 0 } = route.params;
+  const {
+    playerStats, sessionStats, levelNumber = 0,
+    reshuffleWords = null, reshuffleCategory = '', reshuffleEmoji = '', reshuffleFunFact = '',
+  } = route.params;
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -126,7 +129,11 @@ export default function CategoryScreen({ navigation, route }) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const res = await generateLevel(playerStats, { levelNumber });
+      const res = await generateLevel(playerStats, {
+        levelNumber,
+        // Level-Mode retry: send same words, backend reshuffles into new grid.
+        reshuffleWords, reshuffleCategory, reshuffleEmoji, reshuffleFunFact,
+      });
       if (cancelled) return;
       if (!res || !res.ok) {
         setError(res?.error || 'AI ne response nahi diya. Backend check karo.');

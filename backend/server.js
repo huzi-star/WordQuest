@@ -56,27 +56,28 @@ function dedupeLevel(level) {
   return { ...level, words, wordPositions: positions };
 }
 
-// Map a 1..15 level number onto difficulty+grid+wordCount and a per-level
-// time budget. Used when the client requests a specific level (not the
-// adaptive flow). 1-5 easy, 6-10 medium, 11-15 hard.
-function configFromLevelNumber(n) {
-  if (n <= 5) return { difficulty: 'easy', gridSize: 6, wordCount: 3 + Math.min(2, n - 1), timeLimit: 90 };
-  if (n <= 10) return { difficulty: 'medium', gridSize: 8, wordCount: 5 + Math.min(2, n - 6), timeLimit: 75 };
-  return { difficulty: 'hard', gridSize: 10, wordCount: 7 + Math.min(2, n - 11), timeLimit: 75 };
-}
-
 app.post('/api/generate-level', async (req, res) => {
   try {
-    const { playerStats = {}, language = 'urdu', levelNumber = 0, dailySeed = null } = req.body || {};
+    const {
+      playerStats = {},
+      language = 'english',
+      levelNumber = 0,
+      dailySeed = null,
+      // Level-Mode retry / reshuffle parameters.
+      reshuffleWords = null,
+      reshuffleCategory = '',
+      reshuffleEmoji = '',
+      reshuffleFunFact = '',
+    } = req.body || {};
     let difficulty;
     let chaalbaazActive = false;
 
     if (levelNumber > 0) {
-      // Explicit level mode: derive config from the level number.
-      difficulty = { ...configFromLevelNumber(levelNumber), reason: `Level ${levelNumber} unlocked.` };
+      // Level Mode — use the locked level table; no adaptive logic.
+      difficulty = difficultyAgent({}, { levelNumber });
     } else {
+      // Quick Play — adaptive difficulty (unchanged).
       difficulty = difficultyAgent(playerStats);
-      // Chaalbaaz adversary: if the player is dominating, escalate.
       const chaalbaazTune = await chaalbaazAgent({ mode: 'tune', playerStats });
       if (chaalbaazTune) {
         difficulty = { ...difficulty, ...chaalbaazTune };
@@ -90,6 +91,10 @@ app.post('/api/generate-level', async (req, res) => {
       language,
       levelNumber,
       dailySeed,
+      reshuffleWords,
+      reshuffleCategory,
+      reshuffleEmoji,
+      reshuffleFunFact,
     });
     const level = dedupeLevel(rawLevel);
     res.json({
