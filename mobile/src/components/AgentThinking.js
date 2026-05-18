@@ -7,7 +7,7 @@ import { useTheme } from '../utils/theme';
 export default function AgentThinking({ message, visible, duration = 2200 }) {
   const theme = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(60)).current;
+  const translateY = useRef(new Animated.Value(-60)).current;
   const scale = useRef(new Animated.Value(0.95)).current;
   const hideTimer = useRef(null);
 
@@ -17,9 +17,8 @@ export default function AgentThinking({ message, visible, duration = 2200 }) {
       hideTimer.current = null;
     }
     if (visible && message) {
-      // Reset so consecutive messages replace cleanly without piling up.
       opacity.setValue(0);
-      translateY.setValue(60);
+      translateY.setValue(-60);
       scale.setValue(0.95);
       Animated.parallel([
         Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
@@ -29,7 +28,7 @@ export default function AgentThinking({ message, visible, duration = 2200 }) {
       hideTimer.current = setTimeout(() => {
         Animated.parallel([
           Animated.timing(opacity, { toValue: 0, duration: 260, useNativeDriver: true }),
-          Animated.timing(translateY, { toValue: 30, duration: 260, useNativeDriver: true }),
+          Animated.timing(translateY, { toValue: -30, duration: 260, useNativeDriver: true }),
         ]).start();
       }, duration);
     }
@@ -70,11 +69,11 @@ export default function AgentThinking({ message, visible, duration = 2200 }) {
 }
 
 const styles = StyleSheet.create({
-  // Position below the action buttons area so it never overlaps the score
-  // bar / timer or the grid.
+  // Pinned at the TOP of the game area, above the score bar (in the marked
+  // empty band the user pointed to).
   wrapper: {
     position: 'absolute',
-    bottom: 110,
+    top: 4,
     left: 14,
     right: 14,
     zIndex: 999,

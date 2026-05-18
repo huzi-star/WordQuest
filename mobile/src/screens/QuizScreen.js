@@ -17,7 +17,42 @@ export default function QuizScreen({ navigation }) {
   const [picked, setPicked] = useState(null);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(6);
   const fade = useRef(new Animated.Value(0)).current;
+  const tickRef = useRef(null);
+
+  // 6-second countdown per question. When time runs out we auto-mark as
+  // unanswered (no score gain) and advance after a short feedback delay.
+  useEffect(() => {
+    if (loading || !quiz || done) return undefined;
+    if (picked !== null) return undefined; // freeze when answered
+    setTimeLeft(6);
+    if (tickRef.current) clearInterval(tickRef.current);
+    tickRef.current = setInterval(() => {
+      setTimeLeft((t) => {
+        if (t <= 1) {
+          clearInterval(tickRef.current);
+          tickRef.current = null;
+          // Mark as time-up: pick a sentinel value (-1) so the option cards
+          // still reveal the correct answer briefly.
+          setPicked(-1);
+          setTimeout(() => {
+            setPicked(null);
+            if (idx >= quiz.questions.length - 1) setDone(true);
+            else setIdx((i) => i + 1);
+          }, 1500);
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+    return () => {
+      if (tickRef.current) {
+        clearInterval(tickRef.current);
+        tickRef.current = null;
+      }
+    };
+  }, [idx, loading, quiz, picked, done]);
 
   useEffect(() => {
     (async () => {
@@ -41,6 +76,10 @@ export default function QuizScreen({ navigation }) {
 
   function pickOption(i) {
     if (picked !== null) return;
+    if (tickRef.current) {
+      clearInterval(tickRef.current);
+      tickRef.current = null;
+    }
     setPicked(i);
     if (i === quiz.questions[idx].correctIndex) {
       setScore((s) => s + 1);
@@ -116,8 +155,28 @@ export default function QuizScreen({ navigation }) {
             <Text style={[styles.title, { color: theme.accent }]}>{quiz.topicEmoji} {quiz.topic}</Text>
             <Text style={styles.subtitle}>{t('quiz_question')} {idx + 1} / {quiz.questions.length}</Text>
           </View>
-          <View style={[styles.scorePill, { borderColor: theme.gold }]}>
-            <Text style={[styles.scoreText, { color: theme.gold }]}>{score}</Text>
+          <View style={styles.pillsRow}>
+            <View
+              style={[
+                styles.timePill,
+                {
+                  borderColor: timeLeft <= 2 ? '#ef4444' : theme.accent,
+                  backgroundColor: timeLeft <= 2 ? 'rgba(239,68,68,0.15)' : `${theme.accent}1f`,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.timeText,
+                  { color: timeLeft <= 2 ? '#ef4444' : theme.accent },
+                ]}
+              >
+                ⏱ {timeLeft}s
+              </Text>
+            </View>
+            <View style={[styles.scorePill, { borderColor: theme.gold }]}>
+              <Text style={[styles.scoreText, { color: theme.gold }]}>★ {score}</Text>
+            </View>
           </View>
         </View>
 
@@ -192,8 +251,11 @@ const styles = StyleSheet.create({
   backIcon: { color: '#fff', fontSize: 22 },
   title: { fontSize: 18, fontWeight: '900' },
   subtitle: { color: '#94a3b8', fontSize: 12 },
-  scorePill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, borderWidth: 1 },
-  scoreText: { fontWeight: '900', fontSize: 16 },
+  scorePill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
+  scoreText: { fontWeight: '900', fontSize: 14 },
+  pillsRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  timePill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
+  timeText: { fontWeight: '900', fontSize: 14 },
 
   qCard: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 16, borderWidth: 1 },
   qText: { color: '#fff', fontSize: 17, lineHeight: 24, fontWeight: '600' },
