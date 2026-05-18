@@ -75,42 +75,91 @@ export default function RoundCompleteScreen({ navigation, route }) {
 
   const { wordsFound, totalWords, timeLeft, roundScore } = roundResult;
   const ratio = totalWords > 0 ? wordsFound / totalWords : 0;
-  const isPerfect = ratio === 1;
-  const heroEmoji = isPerfect ? '🎉' : ratio >= 0.5 ? '✨' : '💪';
-  const heroTitle = isPerfect ? 'PERFECT ROUND!' : ratio >= 0.5 ? 'NICE WORK!' : 'KEEP GOING!';
-  const heroSub = isPerfect ? 'Sab words mil gaye 🇵🇰' : ratio >= 0.5 ? 'Aadha kaam ho gaya' : 'Agla round better hoga';
-  const accent = isPerfect ? '#22c55e' : ratio >= 0.5 ? '#fcd34d' : '#fb923c';
+  // Star tier: 3 perfect / 2 good / 1 ok / 0 failed.
+  const stars = ratio === 1 ? 3 : ratio >= 0.66 ? 2 : ratio >= 0.34 ? 1 : 0;
+  const isFailed = stars === 0;
+  const heroTitle = isFailed ? 'FAILED' : 'LEVEL COMPLETED';
+  const heroSub = isFailed
+    ? 'Agli baar aur behtar! 💔'
+    : stars === 3 ? 'Perfect! Sab mil gaye 🇵🇰'
+    : stars === 2 ? 'Acha kaam — keep going!'
+    : 'Pass — agla level try karo';
+  const accent = isFailed ? '#ef4444' : stars === 3 ? theme.accent : stars === 2 ? theme.gold : '#fb923c';
+
+  const winEmojis = ['🇵🇰', '🎉', '✨', '⭐', '🏆', '🥳', '🎊', '👑', '💚', '🌟', '🎆', '🪅'];
+  const failEmojis = ['😢', '💔', '😭', '☹️', '🥺', '😞', '⛈', '🌧'];
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <View style={[styles.blob, { backgroundColor: accent, top: -100, right: -80 }]} />
-      <Confetti visible={showConfetti} count={40} duration={2400} onDone={() => setShowConfetti(false)} />
+      <Confetti
+        visible={showConfetti}
+        count={42}
+        duration={2400}
+        emojis={isFailed ? failEmojis : winEmojis}
+        onDone={() => setShowConfetti(false)}
+      />
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Hero */}
+          {/* WOODEN-PLANK STYLE HERO */}
           <Animated.View style={[styles.hero, { opacity: fadeIn, transform: [{ scale: heroScale }] }]}>
-            <View style={[styles.heroCircle, { borderColor: accent, shadowColor: accent }]}>
-              <Text style={styles.heroEmoji}>{heroEmoji}</Text>
+            <View
+              style={[
+                styles.plank,
+                {
+                  backgroundColor: isFailed ? '#4b1d1d' : '#92400e',
+                  borderColor: isFailed ? '#7f1d1d' : '#fb923c',
+                  shadowColor: accent,
+                },
+              ]}
+            >
+              {/* Leaf decorations (left/right) */}
+              <Text style={[styles.leaf, { left: -10, top: 12 }]}>🌿</Text>
+              <Text style={[styles.leaf, { right: -10, top: 12 }]}>🌿</Text>
+
+              {/* Stars row */}
+              <View style={styles.starsRow}>
+                <Text style={[styles.star, { fontSize: 36, opacity: stars >= 1 ? 1 : 0.18 }]}>
+                  {stars >= 1 ? '⭐' : '☆'}
+                </Text>
+                <Text style={[styles.star, styles.starBig, { opacity: stars >= 2 ? 1 : 0.18 }]}>
+                  {stars >= 2 ? '⭐' : '☆'}
+                </Text>
+                <Text style={[styles.star, { fontSize: 36, opacity: stars >= 3 ? 1 : 0.18 }]}>
+                  {stars >= 3 ? '⭐' : '☆'}
+                </Text>
+              </View>
+
+              {/* Bottom title bar */}
+              <View
+                style={[
+                  styles.bannerBar,
+                  {
+                    backgroundColor: isFailed ? '#7f1d1d' : '#c2410c',
+                    borderColor: isFailed ? '#ef4444' : '#fb923c',
+                  },
+                ]}
+              >
+                <Text style={styles.ropeL}>⎯</Text>
+                <Text style={[styles.bannerText, { color: '#fff' }]}>{heroTitle}</Text>
+                <Text style={styles.ropeR}>⎯</Text>
+              </View>
             </View>
-            <Text style={[styles.heroTitle, { color: accent }]}>{heroTitle}</Text>
-            <Text style={styles.heroSub}>{heroSub}</Text>
+
+            <Text style={[styles.heroSub, { color: '#94a3b8', marginTop: 14 }]}>{heroSub}</Text>
+
             <Animated.Text
               style={[
                 styles.heroScore,
                 {
                   color: accent,
-                  transform: [
-                    {
-                      scale: scoreFlash.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [1, 1.18],
-                      }),
-                    },
-                  ],
+                  transform: [{
+                    scale: scoreFlash.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] }),
+                  }],
                 },
               ]}
             >
-              +{roundScore}
+              {isFailed ? '+0' : `+${roundScore}`}
             </Animated.Text>
             <Text style={styles.heroScoreLabel}>points earned</Text>
           </Animated.View>
@@ -212,6 +261,29 @@ const styles = StyleSheet.create({
   },
   heroEmoji: { fontSize: 64 },
   heroTitle: { fontSize: 26, fontWeight: '900', marginTop: 12, letterSpacing: 1 },
+
+  // Wooden plank (level complete / failed)
+  plank: {
+    width: '94%', alignSelf: 'center',
+    paddingTop: 22, paddingBottom: 56, paddingHorizontal: 18,
+    borderRadius: 18, borderWidth: 3,
+    alignItems: 'center', justifyContent: 'center',
+    shadowOpacity: 0.5, shadowRadius: 22, shadowOffset: { width: 0, height: 8 }, elevation: 12,
+    position: 'relative',
+  },
+  leaf: { position: 'absolute', fontSize: 38 },
+  starsRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 8 },
+  star: { fontSize: 36, color: '#fcd34d' },
+  starBig: { fontSize: 52, marginBottom: 4, color: '#fcd34d' },
+  bannerBar: {
+    position: 'absolute', bottom: -2, left: 24, right: 24,
+    paddingVertical: 10, borderRadius: 12, borderWidth: 2,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+  },
+  bannerText: { fontSize: 16, fontWeight: '900', letterSpacing: 2 },
+  ropeL: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  ropeR: { color: '#fff', fontSize: 16, fontWeight: '900' },
   heroSub: { color: '#94a3b8', marginTop: 4 },
   heroScore: { fontSize: 54, fontWeight: '900', marginTop: 12 },
   heroScoreLabel: { color: '#64748b', fontSize: 11, letterSpacing: 1.5, fontWeight: '700' },

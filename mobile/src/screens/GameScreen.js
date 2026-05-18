@@ -572,7 +572,7 @@ export default function GameScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 12 },
+  container: { flex: 1, paddingHorizontal: 12, paddingTop: 80, paddingBottom: 12 },
   topBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around',
     borderRadius: 16, paddingVertical: 12, paddingHorizontal: 12, borderWidth: 1,

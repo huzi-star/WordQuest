@@ -2,13 +2,13 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View, Text, Dimensions } from 'react-native';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const EMOJIS = ['🎉', '✨', '⭐', '💫', '🎊', '🏆', '🇵🇰', '🥳', '🪅', '🎈', '🌟', '💚', '🎆'];
+const DEFAULT_EMOJIS = ['🎉', '✨', '⭐', '💫', '🎊', '🏆', '🇵🇰', '🥳', '🪅', '🎈', '🌟', '💚', '🎆'];
 
-function Particle({ delay }) {
+function Particle({ delay, emojis }) {
   const fall = useRef(new Animated.Value(0)).current;
   const swayBase = useMemo(() => (Math.random() - 0.5) * 80, []);
   const startX = useMemo(() => Math.random() * SCREEN_W, []);
-  const emoji = useMemo(() => EMOJIS[Math.floor(Math.random() * EMOJIS.length)], []);
+  const emoji = useMemo(() => emojis[Math.floor(Math.random() * emojis.length)], []);
   const rotateBase = useMemo(() => (Math.random() - 0.5) * 360, []);
 
   useEffect(() => {
@@ -43,7 +43,7 @@ function Particle({ delay }) {
   );
 }
 
-export default function Confetti({ visible, count = 40, duration = 2400, onDone }) {
+export default function Confetti({ visible, count = 40, duration = 2400, emojis = DEFAULT_EMOJIS, onDone }) {
   const seedRef = useRef(0);
   useEffect(() => {
     if (visible) {
@@ -59,7 +59,7 @@ export default function Confetti({ visible, count = 40, duration = 2400, onDone 
   return (
     <View pointerEvents="none" style={styles.layer}>
       {Array.from({ length: count }).map((_, i) => (
-        <Particle key={`${seed}-${i}`} delay={i * 40} />
+        <Particle key={`${seed}-${i}`} delay={i * 40} emojis={emojis} />
       ))}
     </View>
   );

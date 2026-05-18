@@ -66,7 +66,7 @@ export default function AgentThinking({ message, visible, duration = 2200 }) {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    top: 0,
+    top: 8,
     left: 12,
     right: 12,
     zIndex: 999,
