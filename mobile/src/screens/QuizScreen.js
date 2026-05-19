@@ -10,6 +10,104 @@ import { generateQuiz } from '../utils/api';
 import {
   loadStats, rememberQuizTopic, rememberQuizQuestions, markQuizAttempt,
 } from '../utils/storage';
+import { Easing } from 'react-native';
+
+// Premium loading screen shown while gpt-4o-mini generates the quiz.
+function QuizLoading({ theme }) {
+  const [stepIdx, setStepIdx] = useState(0);
+  const rotate = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(1)).current;
+  const fade = useRef(new Animated.Value(0)).current;
+
+  const STEPS = [
+    { icon: '🧠', text: 'Picking fresh topics for you...' },
+    { icon: '🤖', text: 'AI writing 20 questions...' },
+    { icon: '✍️', text: 'Crafting four plausible options...' },
+    { icon: '✨', text: 'Adding short explanations...' },
+    { icon: '🎯', text: 'Shuffling and finalizing...' },
+  ];
+
+  useEffect(() => {
+    Animated.timing(fade, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    Animated.loop(
+      Animated.timing(rotate, { toValue: 1, duration: 2400, easing: Easing.linear, useNativeDriver: true }),
+    ).start();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.08, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ]),
+    ).start();
+    const id = setInterval(() => setStepIdx((i) => (i + 1) % STEPS.length), 1700);
+    return () => clearInterval(id);
+  }, []);
+
+  const spin = rotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+  return (
+    <View style={[styles.loadContainer, { backgroundColor: theme.bg }]}>
+      <View style={[styles.loadBlob, { backgroundColor: theme.accent, top: 80, left: -80, opacity: 0.18 }]} />
+      <View style={[styles.loadBlob, { backgroundColor: theme.accent2, bottom: 100, right: -70, opacity: 0.15 }]} />
+
+      <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <Animated.View style={[styles.loadCard, { opacity: fade, backgroundColor: theme.card, borderColor: theme.accent2, shadowColor: theme.accent2 }]}>
+          {/* Animated halo + core */}
+          <Animated.View style={[styles.loadHaloOuter, { borderColor: `${theme.accent2}33`, transform: [{ scale: pulse }] }]}>
+            <Animated.View style={[styles.loadHaloRing, { transform: [{ rotate: spin }] }]}>
+              <View style={[styles.loadHaloDot, { backgroundColor: theme.accent2, shadowColor: theme.accent2 }]} />
+              <View style={[styles.loadHaloDotSm, { backgroundColor: theme.gold }]} />
+            </Animated.View>
+            <View style={[styles.loadCore, { borderColor: theme.accent2 }]}>
+              <Text style={styles.loadCoreIcon}>❓</Text>
+            </View>
+          </Animated.View>
+
+          <Text style={[styles.loadBrand, { color: theme.accent2 }]}>AI QUIZ ENGINE</Text>
+          <Text style={styles.loadTitle}>Generating your quiz</Text>
+
+          {/* Animated step text */}
+          <View style={styles.loadStepRow}>
+            <Text style={styles.loadStepIcon}>{STEPS[stepIdx].icon}</Text>
+            <Text style={styles.loadStepText}>{STEPS[stepIdx].text}</Text>
+          </View>
+
+          {/* Step dots */}
+          <View style={styles.loadDots}>
+            {STEPS.map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.loadDot,
+                  i === stepIdx && { backgroundColor: theme.accent2, width: 22 },
+                ]}
+              />
+            ))}
+          </View>
+
+          {/* Stat strip */}
+          <View style={[styles.loadStats, { borderColor: theme.border }]}>
+            <View style={styles.loadStatTile}>
+              <Text style={styles.loadStatLabel}>QUESTIONS</Text>
+              <Text style={[styles.loadStatValue, { color: theme.accent2 }]}>20</Text>
+            </View>
+            <View style={styles.loadStatDivider} />
+            <View style={styles.loadStatTile}>
+              <Text style={styles.loadStatLabel}>PER ANSWER</Text>
+              <Text style={[styles.loadStatValue, { color: theme.gold }]}>+200</Text>
+            </View>
+            <View style={styles.loadStatDivider} />
+            <View style={styles.loadStatTile}>
+              <Text style={styles.loadStatLabel}>TIME</Text>
+              <Text style={[styles.loadStatValue, { color: theme.accent }]}>7s</Text>
+            </View>
+          </View>
+
+          <Text style={styles.loadFooter}>Powered by gpt-4o-mini · Fresh questions every time</Text>
+        </Animated.View>
+      </SafeAreaView>
+    </View>
+  );
+}
 
 const QUIZ_QUESTIONS = 20;
 const SECONDS_PER_QUESTION = 7;
@@ -197,12 +295,7 @@ export default function QuizScreen({ navigation }) {
   }
 
   if (loading) {
-    return (
-      <SafeAreaView style={[styles.center, { backgroundColor: theme.bg }]}>
-        <ActivityIndicator size="large" color={theme.accent} />
-        <Text style={[styles.loadText, { color: theme.accent }]}>AI is generating your quiz...</Text>
-      </SafeAreaView>
-    );
+    return <QuizLoading theme={theme} />;
   }
 
   if (!quiz) {
@@ -345,6 +438,56 @@ export default function QuizScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // Premium loading screen
+  loadContainer: { flex: 1, overflow: 'hidden' },
+  loadBlob: { position: 'absolute', width: 320, height: 320, borderRadius: 160 },
+  loadCard: {
+    width: '100%', maxWidth: 380,
+    borderRadius: 26, borderWidth: 1.5,
+    padding: 24, alignItems: 'center',
+    shadowOpacity: 0.45, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 18,
+  },
+  loadHaloOuter: {
+    width: 140, height: 140, borderRadius: 70,
+    borderWidth: 3, alignItems: 'center', justifyContent: 'center',
+  },
+  loadHaloRing: {
+    width: 124, height: 124, borderRadius: 62,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  loadHaloDot: {
+    position: 'absolute', top: -3, width: 14, height: 14, borderRadius: 7,
+    shadowOpacity: 1, shadowRadius: 10, shadowOffset: { width: 0, height: 0 },
+  },
+  loadHaloDotSm: { position: 'absolute', right: 0, top: 60, width: 9, height: 9, borderRadius: 5, opacity: 0.85 },
+  loadCore: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: 'rgba(15,23,42,0.7)', borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  loadCoreIcon: { fontSize: 30 },
+  loadBrand: { marginTop: 18, fontSize: 11, fontWeight: '900', letterSpacing: 2.5 },
+  loadTitle: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 4, letterSpacing: 0.5 },
+  loadStepRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginTop: 14, paddingHorizontal: 8, minHeight: 40,
+  },
+  loadStepIcon: { fontSize: 22 },
+  loadStepText: { color: '#cbd5e1', fontSize: 14, flex: 1, lineHeight: 19 },
+  loadDots: { flexDirection: 'row', gap: 6, marginTop: 8 },
+  loadDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#334155' },
+  loadStats: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: 20, paddingVertical: 12, paddingHorizontal: 4,
+    borderTopWidth: 1, borderBottomWidth: 1,
+    width: '100%',
+  },
+  loadStatTile: { flex: 1, alignItems: 'center' },
+  loadStatLabel: { color: '#64748b', fontSize: 9, fontWeight: '900', letterSpacing: 1.5 },
+  loadStatValue: { fontSize: 20, fontWeight: '900', marginTop: 4 },
+  loadStatDivider: { width: 1, height: 28, backgroundColor: '#1f2937' },
+  loadFooter: { color: '#64748b', fontSize: 11, marginTop: 16, fontStyle: 'italic', textAlign: 'center' },
+
   container: { flex: 1, overflow: 'hidden' },
   blob: { position: 'absolute', width: 320, height: 320, borderRadius: 160 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
