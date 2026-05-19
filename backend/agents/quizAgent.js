@@ -21,7 +21,14 @@ const VARIETY_TOPICS = [
 
 // Cascade of models: prefer 2.5-flash for quality, fall back to 1.5-flash
 // (1500 RPD free quota) when the primary is rate-limited.
-const QUIZ_MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
+// Cascade. Each model has its own free-tier quota bucket — moving down
+// the list lets the quiz keep working after the primary is exhausted.
+const QUIZ_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+];
 
 async function tryGemini({
   apiKey, count, language, difficulty, modelName, excludeTopics = [], excludeQuestions = [],
