@@ -153,8 +153,11 @@ export default function LevelsScreen({ navigation }) {
 function LevelTile({ n, stats, theme, onPress }) {
   const isUnlocked = n <= (stats.maxUnlockedLevel || 1);
   const isCompleted = (stats.completedLevels || []).includes(n);
+  const isCurrent = n === (stats.maxUnlockedLevel || 1) && !isCompleted;
   const cfg = LEVEL_TABLE[n];
   const tierColor = colorFor(n, theme);
+  const borderColor = isCompleted ? theme.gold : isUnlocked ? tierColor : '#1e293b';
+
   return (
     <TouchableOpacity
       activeOpacity={isUnlocked ? 0.85 : 1}
@@ -163,24 +166,54 @@ function LevelTile({ n, stats, theme, onPress }) {
       style={[
         styles.tile,
         {
-          backgroundColor: isUnlocked ? theme.card : 'rgba(15,23,42,0.6)',
-          borderColor: isCompleted ? theme.gold : isUnlocked ? tierColor : theme.border,
+          backgroundColor: isUnlocked ? theme.card : '#0a0f1a',
+          borderColor,
           shadowColor: isCompleted ? theme.gold : isUnlocked ? tierColor : 'transparent',
-          shadowOpacity: isUnlocked ? 0.35 : 0,
+          shadowOpacity: isUnlocked ? 0.45 : 0,
         },
       ]}
     >
-      {isCompleted ? <Text style={[styles.tileStar, { color: theme.gold }]}>★</Text> : null}
-      <Text style={[styles.tileNum, { color: isUnlocked ? '#fff' : '#475569' }]}>{n}</Text>
+      {/* Top gradient highlight band */}
       {isUnlocked ? (
-        <>
+        <View style={[styles.tileGlow, { backgroundColor: `${tierColor}26` }]} />
+      ) : null}
+
+      {/* "CURRENT" or stars badges at top-right */}
+      {isCompleted ? (
+        <View style={[styles.completeBadge, { backgroundColor: theme.gold }]}>
+          <Text style={styles.completeBadgeText}>★</Text>
+        </View>
+      ) : isCurrent ? (
+        <View style={[styles.currentBadge, { borderColor: tierColor, backgroundColor: `${tierColor}22` }]}>
+          <Text style={[styles.currentBadgeText, { color: tierColor }]}>NOW</Text>
+        </View>
+      ) : null}
+
+      {/* Big level number */}
+      <Text
+        style={[
+          styles.tileNum,
+          { color: isUnlocked ? '#fff' : '#334155' },
+        ]}
+      >
+        {n}
+      </Text>
+
+      {/* Lock / meta block */}
+      {isUnlocked ? (
+        <View style={styles.metaBox}>
           <Text style={[styles.tileMeta, { color: tierColor }]}>
             {cfg.gridSize}×{cfg.gridSize}
           </Text>
-          <Text style={styles.tileWords}>{cfg.wordCount}w · {cfg.timeLimit}s</Text>
-        </>
+          <View style={styles.tileMetaRow}>
+            <Text style={styles.tileWords}>🔤 {cfg.wordCount}</Text>
+            <Text style={styles.tileWords}>⏱ {cfg.timeLimit}s</Text>
+          </View>
+        </View>
       ) : (
-        <Text style={[styles.tileMeta, { color: '#475569', marginTop: 4 }]}>🔒</Text>
+        <View style={[styles.lockIconWrap, { borderColor: '#334155' }]}>
+          <Text style={styles.lockIcon}>🔒</Text>
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -209,16 +242,43 @@ const styles = StyleSheet.create({
   progressFill: { height: 8, borderRadius: 4 },
   progressHint: { color: '#94a3b8', fontSize: 11, marginTop: 4 },
 
-  flatGrid: { gap: 10, marginTop: 6 },
-  gridRow: { flexDirection: 'row', gap: 10 },
+  flatGrid: { gap: 12, marginTop: 6 },
+  gridRow: { flexDirection: 'row', gap: 12 },
   tile: {
-    flex: 1, aspectRatio: 1, borderWidth: 1.5, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center', paddingTop: 6,
-    shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6,
+    flex: 1, aspectRatio: 1, borderWidth: 1.5, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+    paddingTop: 10, paddingBottom: 8,
+    shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 8,
+    overflow: 'hidden',
+  },
+  tileGlow: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, height: '55%',
+    borderTopLeftRadius: 18, borderTopRightRadius: 18,
   },
   tileSpacer: { flex: 1 },
-  tileStar: { position: 'absolute', top: 6, right: 8, fontSize: 16 },
-  tileNum: { fontSize: 32, fontWeight: '900' },
-  tileMeta: { fontSize: 11, fontWeight: '900', letterSpacing: 1, marginTop: 4 },
-  tileWords: { color: '#64748b', fontSize: 9, fontWeight: '700', marginTop: 2 },
+  completeBadge: {
+    position: 'absolute', top: 6, right: 8,
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
+  },
+  completeBadgeText: { color: '#0f172a', fontWeight: '900', fontSize: 14 },
+  currentBadge: {
+    position: 'absolute', top: 6, left: 6,
+    paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: 8, borderWidth: 1,
+  },
+  currentBadgeText: { fontSize: 8, fontWeight: '900', letterSpacing: 1 },
+  tileNum: { fontSize: 38, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4 },
+  metaBox: { alignItems: 'center', marginTop: 2 },
+  tileMeta: { fontSize: 13, fontWeight: '900', letterSpacing: 1 },
+  tileMetaRow: { flexDirection: 'row', gap: 6, marginTop: 2 },
+  tileWords: { color: '#94a3b8', fontSize: 10, fontWeight: '700' },
+  lockIconWrap: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(15,23,42,0.7)', borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center', marginTop: 4,
+  },
+  lockIcon: { fontSize: 18, opacity: 0.6 },
 });

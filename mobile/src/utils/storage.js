@@ -126,9 +126,15 @@ export async function resetStats() {
   try {
     const current = await loadStats();
     const preserved = {
+      // Daily challenge lock + countdown timer state — never touched.
       dailyChallengeLastAttemptAt: current.dailyChallengeLastAttemptAt || 0,
+      // Quiz mode lock + history state — never touched.
       quizLastAttemptAt: current.quizLastAttemptAt || 0,
+      recentQuizTopics: current.recentQuizTopics || [],
+      recentQuizQuestions: current.recentQuizQuestions || [],
+      // Level retry word cache — keep so retries still work.
       levelWordCache: current.levelWordCache || {},
+      // Onboarding flag — never re-show the tutorial.
       hasSeenOnboarding: current.hasSeenOnboarding || false,
     };
     const reset = { ...DEFAULTS, ...preserved };

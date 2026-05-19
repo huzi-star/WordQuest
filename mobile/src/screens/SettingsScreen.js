@@ -170,10 +170,12 @@ export default function SettingsScreen({ navigation }) {
                     settings.theme === thm.id && { borderWidth: 3 },
                   ]}
                 >
-                  <View style={[styles.themeSwatch, { backgroundColor: thm.accent }]} />
-                  <View style={[styles.themeSwatch, { backgroundColor: thm.accent2 }]} />
-                  <View style={[styles.themeSwatch, { backgroundColor: thm.gold }]} />
-                  <Text style={styles.themeName}>{thm.name}</Text>
+                  <View style={styles.themeChipRow}>
+                    <View style={[styles.themeSwatch, { backgroundColor: thm.accent }]} />
+                    <View style={[styles.themeSwatch, { backgroundColor: thm.accent2 }]} />
+                    <View style={[styles.themeSwatch, { backgroundColor: thm.gold }]} />
+                  </View>
+                  <Text style={styles.themeName} numberOfLines={1}>{thm.name}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -230,17 +232,22 @@ const styles = StyleSheet.create({
   langBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
   langText: { color: '#94a3b8', fontWeight: '900', fontSize: 12 },
 
-  themeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 12 },
+  themeRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, rowGap: 8, padding: 12 },
   themeChip: {
-    flexBasis: '47%',
-    padding: 10, borderRadius: 12,
+    width: '48%',
+    paddingVertical: 10, paddingHorizontal: 10,
+    borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 6,
   },
+  themeChipRow: { flexDirection: 'row', gap: 4 },
   themeSwatch: { width: 14, height: 14, borderRadius: 4 },
-  themeName: { color: '#fff', fontSize: 11, fontWeight: '700', marginLeft: 4 },
+  themeName: {
+    color: '#fff', fontSize: 11, fontWeight: '700',
+    textAlign: 'center', flexShrink: 1,
+  },
 
   dangerArrow: { color: '#ef4444', fontSize: 22, fontWeight: 'bold' },
 });

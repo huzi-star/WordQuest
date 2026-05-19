@@ -154,25 +154,47 @@ export default function DailyChallengeScreen({ navigation }) {
     );
   }
 
-  if (!data) {
+  // Defensive: if the level payload is missing essential fields, fall back
+  // to the error state instead of crashing on first render.
+  const level = data?.level;
+  const hasValidLevel =
+    level &&
+    Array.isArray(level.grid) && level.grid.length > 0 &&
+    Array.isArray(level.words) && level.words.length > 0;
+
+  if (!data || !hasValidLevel) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: theme.bg }]}>
+        <Text style={styles.errEmoji}>⚠️</Text>
         <Text style={styles.errText}>Daily challenge failed to load.</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.retryBtn, { backgroundColor: theme.accent }]}>
-          <Text style={[styles.retryText, { color: theme.bg }]}>Go back</Text>
-        </TouchableOpacity>
+        <Text style={[styles.errText, { fontSize: 12, color: '#94a3b8', marginTop: 4 }]}>
+          AI server slow. Tap retry, or check your internet.
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+          <TouchableOpacity
+            onPress={() => navigation.replace('DailyChallenge')}
+            style={[styles.retryBtn, { backgroundColor: theme.accent }]}
+          >
+            <Text style={[styles.retryText, { color: theme.bg }]}>Retry</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={[styles.retryBtn, { backgroundColor: 'rgba(148,163,184,0.1)', borderColor: theme.border, borderWidth: 1 }]}
+          >
+            <Text style={[styles.retryText, { color: '#cbd5e1' }]}>Go back</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
 
-  const { difficulty: _, level } = data;
-  // Force the override values — backend may not always honor them.
+  // Force the daily-specific overrides.
   const difficulty = {
     difficulty: 'hard',
     timeLimit: DAILY_TIME,
     wordCount: DAILY_WORDS,
     gridSize: DAILY_GRID,
-    reason: 'Daily Challenge — 12×12 elite mode',
+    reason: 'Daily Challenge — 10×10 elite mode',
     isDaily: true,
   };
 
@@ -261,7 +283,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 18, overflow: 'hidden' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadText: { fontWeight: '700' },
-  errText: { color: '#ef4444' },
+  errText: { color: '#ef4444', textAlign: 'center', fontWeight: '700' },
+  errEmoji: { fontSize: 60 },
   retryBtn: { padding: 12, borderRadius: 12, marginTop: 14 },
   retryText: { fontWeight: '900' },
 

@@ -237,13 +237,18 @@ export default function RoundCompleteScreen({ navigation, route }) {
                 const cached = await getLevelWords(roundResult.levelNumber);
                 navigation.replace('Category', {
                   playerStats,
-                  sessionStats,
+                  sessionStats: { ...sessionStats, score: 0, streak: 0, history: [] },
                   levelNumber: roundResult.levelNumber,
                   reshuffleWords: cached?.words || null,
                   reshuffleCategory: cached?.category || '',
                   reshuffleEmoji: cached?.emoji || '',
                   reshuffleFunFact: cached?.funFact || '',
                 });
+                return;
+              }
+              // FAILED DAILY → can't retry today, go home.
+              if (isFailed && isDailyRound) {
+                navigation.replace('Home');
                 return;
               }
               // PASSED LEVEL → advance to next level number.
@@ -262,7 +267,9 @@ export default function RoundCompleteScreen({ navigation, route }) {
             <Text style={styles.primaryArrow}>{isFailed ? '↻' : '▶'}</Text>
             <Text style={styles.primaryText}>
               {isFailed && roundResult.levelNumber > 0
-                ? `RETRY LEVEL ${roundResult.levelNumber}`
+                ? `TRY AGAIN · LEVEL ${roundResult.levelNumber}`
+                : isFailed && isDailyRound
+                ? 'BACK TO HOME'
                 : !isFailed && roundResult.levelNumber > 0
                 ? `NEXT LEVEL ${Math.min(15, roundResult.levelNumber + 1)}`
                 : 'NEXT ROUND'}

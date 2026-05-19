@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Vibration } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Vibration, Alert, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import WordGrid from '../components/WordGrid';
 import WordList from '../components/WordList';
@@ -96,6 +96,43 @@ export default function GameScreen({ navigation, route }) {
       } catch {}
     }
   }, []);
+
+  // Intercept the Android hardware back button — show the leave dialog
+  // instead of dropping the player out without warning.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      confirmLeave();
+      return true; // we handle it ourselves
+    });
+    return () => sub.remove();
+  }, [paused]);
+
+  // Single source of truth for the leave-game flow. Pauses the timer while
+  // the dialog is open, resumes on continue, exits on confirm.
+  function confirmLeave() {
+    setPaused(true);
+    Alert.alert(
+      'Leave game?',
+      'Your current progress will be lost.',
+      [
+        {
+          text: 'Continue Playing',
+          style: 'cancel',
+          onPress: () => setPaused(false),
+        },
+        {
+          text: 'Leave Game',
+          style: 'destructive',
+          onPress: () => {
+            navigation.replace('GameOver', {
+              sessionStats: { ...sessionStats, score, streak },
+            });
+          },
+        },
+      ],
+      { cancelable: true, onDismiss: () => setPaused(false) },
+    );
+  }
 
   // Track which milestones we've already commented on this round.
   const firedRef = useRef({ halfTime: false, lowTime: false, lastIdleAt: Date.now(), lastStreak: 0 });
@@ -583,7 +620,7 @@ export default function GameScreen({ navigation, route }) {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.btn, { backgroundColor: '#7f1d1d', borderColor: '#ef4444', borderWidth: 1 }]}
-          onPress={() => navigation.replace('GameOver', { sessionStats: { ...sessionStats, score, streak } })}
+          onPress={confirmLeave}
         >
           <Text style={[styles.btnText, { color: '#fecaca' }]}>Quit</Text>
         </TouchableOpacity>
