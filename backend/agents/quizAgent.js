@@ -12,8 +12,9 @@ const VARIETY_TOPICS = [
 
 // Single lightweight model — cheapest path through free-tier quota. The
 // quiz only needs basic factual questions, not deep reasoning.
-// Order matters — first model is preferred. 2.5-flash is solid for trivia.
-const QUIZ_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+// Single model. Adding more burns the project's per-minute token budget
+// without buying us much — they all share the same project quota.
+const QUIZ_MODELS = ['gemini-2.5-flash'];
 
 async function tryGemini({ apiKey, count, language, difficulty, modelName, excludeQuestions = [] }) {
   const langInstruction = language === 'urdu'
@@ -50,9 +51,10 @@ Return ONLY this JSON (no markdown):
       maxOutputTokens: 3500,
     },
   });
+  // Vercel maxDuration is 60s so we have room for two real attempts.
   const result = await Promise.race([
     model.generateContent(prompt),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 14000)),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000)),
   ]);
   const text = result.response.text() || '';
   const cleaned = text.replace(/```json|```/g, '').trim();
