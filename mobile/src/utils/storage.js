@@ -45,6 +45,9 @@ const DEFAULTS = {
   // Per-level cached word lists for Level Mode retry. Shape:
   //   { [levelNumber]: { words, category, emoji, funFact } }
   levelWordCache: {},
+  // Per-user onboarding flag — only true after the user finishes the
+  // first-launch walkthrough.
+  hasSeenOnboarding: false,
 };
 
 function todayKey() {
@@ -117,9 +120,21 @@ export async function logGameOver({ finalScore = 0, finalStreak = 0 }) {
   } catch { return null; }
 }
 
-// Reset stats for the CURRENTLY active user scope only.
+// Reset gameplay stats only — preserves daily/quiz lock state, onboarding,
+// and the level word cache so retries still work.
 export async function resetStats() {
-  try { await AsyncStorage.removeItem(K()); } catch {}
+  try {
+    const current = await loadStats();
+    const preserved = {
+      dailyChallengeLastAttemptAt: current.dailyChallengeLastAttemptAt || 0,
+      quizLastAttemptAt: current.quizLastAttemptAt || 0,
+      levelWordCache: current.levelWordCache || {},
+      hasSeenOnboarding: current.hasSeenOnboarding || false,
+    };
+    const reset = { ...DEFAULTS, ...preserved };
+    await AsyncStorage.setItem(K(), JSON.stringify(reset));
+    return reset;
+  } catch { return DEFAULTS; }
 }
 
 export async function setLastAdaptiveStats(stats) {
@@ -149,6 +164,15 @@ export async function rememberQuizQuestions(questions) {
     const incoming = questions.map((q) => String(q));
     const dedup = Array.from(new Set([...incoming, ...(current.recentQuizQuestions || [])])).slice(0, 40);
     const next = { ...current, recentQuizQuestions: dedup };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
+}
+
+export async function markOnboardingSeen() {
+  try {
+    const current = await loadStats();
+    const next = { ...current, hasSeenOnboarding: true };
     await AsyncStorage.setItem(K(), JSON.stringify(next));
     return next;
   } catch { return null; }

@@ -17,6 +17,7 @@ export default function AuthScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const logoScale = React.useRef(new Animated.Value(0.7)).current;
   const fadeIn = React.useRef(new Animated.Value(0)).current;
   React.useEffect(() => {
@@ -61,8 +62,15 @@ export default function AuthScreen({ navigation }) {
       Alert.alert(mode === 'signup' ? 'Sign-up failed' : 'Login failed', res.error);
       return;
     }
-    // Decide next stop: onboarding if first time on this device, else Home.
-    const next = settings.hasSeenOnboarding ? 'Home' : 'Onboarding';
+    // Decide next stop based on the PER-USER onboarding flag. Login screen
+    // doesn't have the new user's stats yet, so check storage directly —
+    // storage scope is set by AuthProvider on auth state change.
+    // eslint-disable-next-line global-require
+    const { loadStats } = require('../utils/storage');
+    // Small delay to let AuthProvider update the storage user scope.
+    await new Promise((r) => setTimeout(r, 250));
+    const stats = await loadStats();
+    const next = stats?.hasSeenOnboarding ? 'Home' : 'Onboarding';
     navigation.dispatch(
       CommonActions.reset({ index: 0, routes: [{ name: next }] }),
     );
@@ -135,15 +143,26 @@ export default function AuthScreen({ navigation }) {
               </View>
               <View style={styles.field}>
                 <Text style={styles.label}>Password</Text>
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Min 6 characters"
-                  placeholderTextColor="#475569"
-                  style={[styles.input, { borderColor: theme.border }]}
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
+                <View style={styles.passwordRow}>
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Min 6 characters"
+                    placeholderTextColor="#475569"
+                    style={[styles.input, styles.passwordInput, { borderColor: theme.border }]}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword((v) => !v)}
+                    style={[styles.eyeBtn, { borderColor: theme.border }]}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.eyeIcon, { color: theme.accent }]}>
+                      {showPassword ? '🙈' : '👁'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <TouchableOpacity
@@ -206,6 +225,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 12,
     color: '#fff', fontSize: 14,
   },
+  passwordRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  passwordInput: { flex: 1 },
+  eyeBtn: {
+    width: 46, height: 46, borderRadius: 12, borderWidth: 1,
+    backgroundColor: 'rgba(15,23,42,0.7)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  eyeIcon: { fontSize: 20 },
 
   submit: { paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 6 },
   submitText: { fontSize: 15, fontWeight: '900', letterSpacing: 1 },

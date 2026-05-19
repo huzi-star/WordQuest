@@ -23,7 +23,7 @@ const SLIDES = [
   },
   {
     icon: '🤖',
-    titleK: '8 AI Agents',
+    titleK: '9 AI Agents',
     bodyK: 'Difficulty, generator, referee, tutor, commentator, coach and reward agents all collaborate on every round.',
     bodyE: 'Difficulty, generator, referee, tutor, commentator, coach and reward agents all collaborate on every round.',
   },
@@ -46,6 +46,11 @@ export default function OnboardingScreen({ navigation }) {
     listRef.current?.scrollToIndex({ index: i, animated: true });
   }
   function finish() {
+    // Per-user flag (only this user skips onboarding on next login).
+    // eslint-disable-next-line global-require
+    const { markOnboardingSeen } = require('../utils/storage');
+    markOnboardingSeen().catch(() => {});
+    // Keep the legacy global flag in sync as well.
     setSetting('hasSeenOnboarding', true);
     navigation.replace('Home');
   }

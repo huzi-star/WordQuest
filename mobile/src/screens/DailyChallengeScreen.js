@@ -7,13 +7,27 @@ import { useTheme } from '../utils/theme';
 import { useSettings } from '../utils/settings';
 import { loadStats } from '../utils/storage';
 
-const LOCK_HOURS = 12;
-const LOCK_MS = LOCK_HOURS * 60 * 60 * 1000;
-// Daily challenge is always: 12×12 grid, 10 words, 100s, 500 points/word.
-const DAILY_GRID = 12;
+// Daily challenge: locked, one round per day. The lock releases at the
+// next local midnight so the player gets a fresh puzzle each calendar day.
+const DAILY_GRID = 10;
 const DAILY_WORDS = 10;
 const DAILY_TIME = 100;
 const DAILY_POINTS_PER_WORD = 500;
+
+function nextMidnight(from = Date.now()) {
+  const d = new Date(from);
+  d.setHours(24, 0, 0, 0); // next 00:00 local
+  return d.getTime();
+}
+function isSameLocalDay(a, b) {
+  const da = new Date(a);
+  const db = new Date(b);
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate()
+  );
+}
 
 function todayKey() {
   const d = new Date();
@@ -46,10 +60,11 @@ export default function DailyChallengeScreen({ navigation }) {
       setLoading(true);
       const stats = await loadStats();
       const lastAttempt = stats.dailyChallengeLastAttemptAt || 0;
-      const unlocksAt = lastAttempt + LOCK_MS;
-      const isLocked = Date.now() < unlocksAt;
+      // Locked until the next local midnight if attempted earlier today.
+      const isLocked = lastAttempt && isSameLocalDay(lastAttempt, Date.now());
+      const unlocksAt = isLocked ? nextMidnight(lastAttempt) : 0;
       if (cancelled) return;
-      setLockedUntil(isLocked ? unlocksAt : 0);
+      setLockedUntil(unlocksAt);
 
       if (isLocked) {
         setLoading(false);
@@ -107,7 +122,7 @@ export default function DailyChallengeScreen({ navigation }) {
             </View>
             <Text style={[styles.lockTitle, { color: theme.gold }]}>CHALLENGE LOCKED</Text>
             <Text style={styles.lockSub}>
-              You have already played today's challenge. A fresh puzzle unlocks in {LOCK_HOURS} hours.
+              You have already played today's challenge. A new puzzle will be available at midnight.
             </Text>
 
             <Text style={styles.countdownLabel}>UNLOCKS IN</Text>

@@ -100,18 +100,18 @@ export default function HomeScreen({ navigation }) {
           </View>
           <View style={styles.iconRow}>
             <TouchableOpacity
-              style={[styles.iconBtn, { borderColor: theme.border }]}
+              style={[styles.iconBtn, { borderColor: theme.accent, backgroundColor: `${theme.accent}1f` }]}
               onPress={() => navigation.navigate('Stats')}
               activeOpacity={0.7}
             >
-              <Text style={styles.iconText}>📊</Text>
+              <Text style={[styles.iconText, { color: theme.accent }]}>📊</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.iconBtn, { borderColor: theme.border }]}
+              style={[styles.iconBtn, { borderColor: theme.accent, backgroundColor: `${theme.accent}1f` }]}
               onPress={() => navigation.navigate('Settings')}
               activeOpacity={0.7}
             >
-              <Text style={styles.iconText}>⚙</Text>
+              <Text style={[styles.iconText, { color: theme.accent }]}>⚙</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -277,11 +277,11 @@ const styles = StyleSheet.create({
   userName: { color: '#fff', fontSize: 15, fontWeight: '800' },
   iconRow: { flexDirection: 'row', gap: 8 },
   iconBtn: {
-    width: 40, height: 40, borderRadius: 14,
+    width: 42, height: 42, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, backgroundColor: 'rgba(15,23,42,0.6)',
+    borderWidth: 1,
   },
-  iconText: { fontSize: 20 },
+  iconText: { fontSize: 20, fontWeight: '900' },
 
   scroll: { paddingHorizontal: 16, paddingTop: 6 },
 

@@ -39,7 +39,23 @@ const navTheme = {
 function Navigator() {
   const { settings, ready } = useSettings();
   const { user, ready: authReady, configured } = useAuth();
-  if (!ready || !authReady) return null;
+  const [statsOnboardingSeen, setStatsOnboardingSeen] = React.useState(null);
+
+  // Re-load the per-user onboarding flag whenever auth state changes so
+  // returning users skip onboarding while brand-new accounts see it once.
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!authReady) return undefined;
+    // eslint-disable-next-line global-require
+    const { loadStats } = require('./src/utils/storage');
+    (async () => {
+      const s = await loadStats();
+      if (!cancelled) setStatsOnboardingSeen(!!s?.hasSeenOnboarding);
+    })();
+    return () => { cancelled = true; };
+  }, [authReady, user?.id]);
+
+  if (!ready || !authReady || statsOnboardingSeen === null) return null;
 
   // Decide entry point:
   //   - Supabase configured + not signed in  → Auth
@@ -47,7 +63,7 @@ function Navigator() {
   //   - Else                                 → Home
   let initialRoute = 'Home';
   if (configured && !user) initialRoute = 'Auth';
-  else if (!settings.hasSeenOnboarding) initialRoute = 'Onboarding';
+  else if (!statsOnboardingSeen && !settings.hasSeenOnboarding) initialRoute = 'Onboarding';
 
   return (
     <Stack.Navigator
