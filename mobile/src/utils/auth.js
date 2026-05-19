@@ -79,6 +79,23 @@ export function AuthProvider({ children }) {
       lastAdaptiveStats: localCurrent.lastAdaptiveStats || null,
       recentQuizTopics: localCurrent.recentQuizTopics || [],
       recentQuizQuestions: localCurrent.recentQuizQuestions || [],
+      // Lock state (Daily Challenge + Quiz cooldown) lives inside the
+      // remote preferences JSONB. Prefer the newer (max) timestamp so the
+      // cooldown can never be bypassed by signing out + back in.
+      dailyChallengeLastAttemptAt: Math.max(
+        Number(remote.preferences?.dailyChallengeLastAttemptAt) || 0,
+        Number(localCurrent.dailyChallengeLastAttemptAt) || 0,
+      ),
+      quizLastAttemptAt: Math.max(
+        Number(remote.preferences?.quizLastAttemptAt) || 0,
+        Number(localCurrent.quizLastAttemptAt) || 0,
+      ),
+      // Onboarding flag — once true on the server, never re-show.
+      hasSeenOnboarding: !!(
+        remote.preferences?.hasSeenOnboarding || localCurrent.hasSeenOnboarding
+      ),
+      // Level retry word cache — local-only.
+      levelWordCache: localCurrent.levelWordCache || {},
     };
     await replaceStats(snapshot);
 

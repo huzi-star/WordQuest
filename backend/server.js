@@ -183,10 +183,15 @@ app.post('/api/round-complete', async (req, res) => {
 app.post('/api/generate-quiz', async (req, res) => {
   try {
     const result = await quizAgent(req.body || {});
-    res.json({ ok: true, result });
+    if (result && result.ok === false) {
+      // Bubble up the AI failure to the client so it can show a real error
+      // instead of an empty quiz screen.
+      return res.status(503).json({ ok: false, error: result.error });
+    }
+    return res.json({ ok: true, result });
   } catch (err) {
     console.error('quiz error:', err);
-    res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 

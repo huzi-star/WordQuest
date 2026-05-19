@@ -107,6 +107,12 @@ export async function upsertStats(userId, stats, prefs = {}) {
       language: prefs.language || 'english',
       sound: prefs.sound !== false,
       vibration: prefs.vibration !== false,
+      // Lock-state timestamps + onboarding flag — stored inside the JSONB
+      // preferences blob so no SQL migration is required. Prevents users
+      // from bypassing daily/quiz cooldowns by signing out and back in.
+      dailyChallengeLastAttemptAt: Number(stats.dailyChallengeLastAttemptAt) || 0,
+      quizLastAttemptAt: Number(stats.quizLastAttemptAt) || 0,
+      hasSeenOnboarding: !!stats.hasSeenOnboarding,
     },
     updated_at: new Date().toISOString(),
   };
