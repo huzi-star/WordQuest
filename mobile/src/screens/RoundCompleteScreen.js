@@ -82,10 +82,12 @@ export default function RoundCompleteScreen({ navigation, route }) {
 
   const { wordsFound, totalWords, timeLeft, roundScore } = roundResult;
   const ratio = totalWords > 0 ? wordsFound / totalWords : 0;
-  // Daily challenge is pass/fail — partial completion = failed, score = 0.
-  // Normal rounds use the 3-tier star system.
+  // Level Mode + Daily Challenge = strict pass/fail. Even ONE missing word
+  // when the timer runs out means the level failed. Only Quick Play keeps
+  // the 3-tier star system.
   const isDailyRound = !!roundResult.isDaily;
-  const stars = isDailyRound
+  const isLevelMode = roundResult.levelNumber > 0;
+  const stars = isLevelMode || isDailyRound
     ? (ratio === 1 ? 3 : 0)
     : (ratio === 1 ? 3 : ratio >= 0.66 ? 2 : ratio >= 0.34 ? 1 : 0);
   const isFailed = stars === 0;

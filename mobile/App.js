@@ -80,7 +80,7 @@ function Navigator() {
       <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Category" component={CategoryScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }} />
-      <Stack.Screen name="Game" component={GameScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forScaleFromCenterAndroid }} />
+      <Stack.Screen name="Game" component={GameScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forScaleFromCenterAndroid, gestureEnabled: false }} />
       <Stack.Screen name="RoundComplete" component={RoundCompleteScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forFadeFromBottomAndroid }} />
       <Stack.Screen name="GameOver" component={GameOverScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Stats" component={StatsScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }} />
