@@ -1,6 +1,6 @@
-// rewardAgent.js — badges + Gemini-generated encouragement + next preview.
+// rewardAgent.js — badges + AI-generated encouragement (OpenAI gpt-4o-mini).
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { generate, isConfigured } = require('../utils/llm');
 
 function evalBadges({ wordsFound, totalWords, timeLeft, score, roundNumber, streak }) {
   const badges = [];
@@ -12,9 +12,8 @@ function evalBadges({ wordsFound, totalWords, timeLeft, score, roundNumber, stre
   return badges;
 }
 
-async function geminiNarrative({ wordsFound, totalWords, timeLeft, streak, language }) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'your_key_here') return { encouragement: '', nextRoundPreview: '' };
+async function narrative({ wordsFound, totalWords, timeLeft, streak, language }) {
+  if (!isConfigured()) return { encouragement: '', nextRoundPreview: '' };
 
   const langInstruction = language === 'english'
     ? 'Respond in clear English.'
@@ -32,13 +31,12 @@ Return STRICTLY valid JSON only:
 }`;
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-    const result = await Promise.race([
-      model.generateContent(prompt),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('reward timeout')), 14000)),
-    ]);
-    const text = result.response.text();
+    const text = await generate(prompt, {
+      timeoutMs: 12000,
+      temperature: 0.8,
+      maxTokens: 220,
+      responseFormat: 'json',
+    });
     const cleaned = text.replace(/```json|```/g, '').trim();
     const jsonStart = cleaned.indexOf('{');
     const jsonEnd = cleaned.lastIndexOf('}');
@@ -55,20 +53,20 @@ Return STRICTLY valid JSON only:
 async function rewardAgent(input = {}) {
   const {
     wordsFound = 0, totalWords = 0, timeLeft = 0, score = 0,
-    roundNumber = 1, streak = 0, language = 'urdu',
+    roundNumber = 1, streak = 0, language = 'english',
   } = input;
 
   const badges = evalBadges({ wordsFound, totalWords, timeLeft, score, roundNumber, streak });
   const allFound = totalWords > 0 && wordsFound === totalWords;
   const streakUpdated = allFound ? streak + 1 : 0;
-  const narrative = await geminiNarrative({ wordsFound, totalWords, timeLeft, streak, language });
+  const nrt = await narrative({ wordsFound, totalWords, timeLeft, streak, language });
 
   return {
-    badges: badges.map((b) => ({ ...b, message: '' })), // message is AI-driven via narrative
+    badges: badges.map((b) => ({ ...b, message: '' })),
     streakUpdated,
     roundSummary: { wordsFound, totalWords, pointsEarned: score, timeLeft },
-    encouragement: narrative.encouragement,
-    nextRoundPreview: narrative.nextRoundPreview,
+    encouragement: nrt.encouragement,
+    nextRoundPreview: nrt.nextRoundPreview,
   };
 }
 

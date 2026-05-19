@@ -3,7 +3,7 @@
 // simpler prompts. Only as a last resort uses a tiny seed-word list so the
 // app never hard-blocks on a single Gemini hiccup.
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { generate, isConfigured } = require('../utils/llm');
 
 function emptyGrid(size) {
   const g = [];
@@ -118,14 +118,13 @@ function emergencyPuzzle(wordCount, gridSize, lastCategory) {
   };
 }
 
-async function tryGenerate({ apiKey, prompt, gridSize }) {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-  const result = await Promise.race([
-    model.generateContent(prompt),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 18000)),
-  ]);
-  const text = result.response.text() || '';
+async function tryGenerate({ prompt, gridSize }) {
+  const text = await generate(prompt, {
+    timeoutMs: 18000,
+    temperature: 0.85,
+    maxTokens: 700,
+    responseFormat: 'json',
+  });
   const cleaned = text.replace(/```json|```/g, '').trim();
   const jsonStart = cleaned.indexOf('{');
   const jsonEnd = cleaned.lastIndexOf('}');
@@ -160,7 +159,7 @@ async function levelGeneratorAgent({
   reshuffleEmoji = '',
   reshuffleFunFact = '',
 }) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const aiReady = isConfigured();
 
   // RESHUFFLE FAST-PATH — used by Level Mode retries.
   if (Array.isArray(reshuffleWords) && reshuffleWords.length) {
@@ -196,7 +195,7 @@ async function levelGeneratorAgent({
 
   let aiResult = null;
 
-  if (apiKey && apiKey !== 'your_key_here') {
+  if (aiReady) {
     const prompts = [
       // Attempt 1: full instructions
       `You are a creative word-search puzzle designer. Pick any thematic category — Pakistani, Indian, world, sport, science, history, mythology, food, art — anything that suits a fun word-search game.
@@ -220,7 +219,7 @@ Return ONLY this JSON (no markdown, no commentary):
     ];
     for (const prompt of prompts) {
       try {
-        aiResult = await tryGenerate({ apiKey, prompt, gridSize });
+        aiResult = await tryGenerate({ prompt, gridSize });
         break;
       } catch (err) {
         console.warn('[levelGenerator] attempt failed:', err.message);

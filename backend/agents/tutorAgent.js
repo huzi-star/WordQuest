@@ -1,13 +1,11 @@
-// tutorAgent.js — AI-only word explainer. No hardcoded fallbacks.
+// tutorAgent.js — AI-only word explainer (OpenAI gpt-4o-mini).
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { generate, isConfigured } = require('../utils/llm');
 
-async function tutorAgent({ word, category = '', funFact = '', language = 'urdu' }) {
+async function tutorAgent({ word, category = '', funFact = '', language = 'english' }) {
+  if (!isConfigured()) return { explanation: '' };
   const upper = String(word || '').toUpperCase();
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'your_key_here') {
-    return { explanation: '' };
-  }
+  if (!upper) return { explanation: '' };
 
   const langInstruction = language === 'english'
     ? 'Write in clear English (max 20 words).'
@@ -23,15 +21,14 @@ why it's culturally / historically significant. ${langInstruction}
 Output ONLY the sentence — no quotes, no labels.`;
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-    const result = await Promise.race([
-      model.generateContent(prompt),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('tutor timeout')), 12000)),
-    ]);
-    const text = (result.response.text() || '').trim().replace(/^["']|["']$/g, '');
-    if (!text || text.length > 220) return { explanation: '' };
-    return { explanation: text };
+    const text = await generate(prompt, {
+      timeoutMs: 10000,
+      temperature: 0.7,
+      maxTokens: 100,
+    });
+    const cleaned = text.trim().replace(/^["']|["']$/g, '');
+    if (!cleaned || cleaned.length > 220) return { explanation: '' };
+    return { explanation: cleaned };
   } catch (err) {
     return { explanation: '' };
   }

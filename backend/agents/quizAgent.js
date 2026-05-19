@@ -1,8 +1,6 @@
-// quizAgent.js — AI-only quiz generator.
-// Lean prompt + small cascade so the request fits inside the free-tier
-// per-minute token budget. No hardcoded question pool.
+// quizAgent.js — AI-only quiz generator (OpenAI gpt-4o-mini).
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { generate, isConfigured } = require('../utils/llm');
 
 const VARIETY_TOPICS = [
   'world geography', 'history', 'science', 'pop culture', 'music',
@@ -10,23 +8,17 @@ const VARIETY_TOPICS = [
   'mythology', 'technology', 'art', 'capital cities', 'famous people',
 ];
 
-// gemini-3-flash-preview has its own fresh quota bucket and is fast enough
-// for a 20-question quiz. We add 2.5-flash as a single backup attempt.
-const QUIZ_MODELS = ['gemini-3-flash-preview', 'gemini-2.5-flash'];
-
-async function tryGemini({ apiKey, count, language, difficulty, modelName, excludeQuestions = [] }) {
+async function tryGenerate({ count, language, difficulty, excludeQuestions = [] }) {
   const langInstruction = language === 'urdu'
     ? 'Roman Urdu mixed with English (Pakistani style).'
     : 'Clear English.';
 
-  // Two random seed topics — keeps the prompt tiny and content varied.
   const pool = [...VARIETY_TOPICS];
   const seeds = [];
   while (seeds.length < 2 && pool.length) {
     seeds.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
   }
 
-  // Cap the exclude list to 5 short snippets to keep input tokens low.
   const excludeQHint = excludeQuestions.length
     ? `\nAvoid repeating: ${excludeQuestions.slice(0, 5).map((q) => String(q).slice(0, 60)).join(' | ')}`
     : '';
@@ -37,25 +29,16 @@ Difficulty: ${difficulty}. ${langInstruction}${excludeQHint}
 
 Each question: exactly 4 options, ONE correct (correctIndex 0-3), one-sentence explanation.
 
-Return ONLY this JSON (no markdown):
+Return ONLY this JSON structure:
 {"topic":"…","topicEmoji":"…","questions":[{"question":"…","options":["a","b","c","d"],"correctIndex":0,"explanation":"…"}]}`;
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: modelName || 'gemini-2.5-flash',
-    generationConfig: {
-      temperature: 0.9,
-      topP: 0.9,
-      maxOutputTokens: 3500,
-    },
+  const text = await generate(prompt, {
+    timeoutMs: 22000,
+    temperature: 0.9,
+    maxTokens: 3500,
+    responseFormat: 'json',
   });
-  // 20s per attempt × 2 models × 2 sizes = 80s worst case. Vercel's 60s
-  // budget keeps actual flows shorter; client allows 75s.
-  const result = await Promise.race([
-    model.generateContent(prompt),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 20000)),
-  ]);
-  const text = result.response.text() || '';
+
   const cleaned = text.replace(/```json|```/g, '').trim();
   const jsonStart = cleaned.indexOf('{');
   const jsonEnd = cleaned.lastIndexOf('}');
@@ -87,38 +70,25 @@ async function quizAgent({
   difficulty = 'medium',
   excludeQuestions = [],
 }) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  if (!isConfigured()) {
+    return { ok: false, error: 'AI not configured. Set OPENAI_API_KEY on the backend.' };
+  }
   const lang = language === 'urdu' ? 'urdu' : 'english';
 
-  if (!apiKey || apiKey === 'your_key_here') {
-    return { ok: false, error: 'AI not configured. Set GEMINI_API_KEY on the backend.' };
+  // Try the full count first. If parse fails, retry with half size (faster).
+  try {
+    return await tryGenerate({ count, language: lang, difficulty, excludeQuestions });
+  } catch (err) {
+    console.warn('[quizAgent] full size failed:', err.message);
   }
-
-  // Two-stage strategy:
-  // 1. Ask for the full count from each model in the cascade.
-  // 2. If all fail (likely free-tier RPM/RPD limits), fall back to a much
-  //    smaller request — 10 questions — so the player still gets a quiz.
-  const tryWithSize = async (size) => {
-    let lastError = '';
-    for (const modelName of QUIZ_MODELS) {
-      try {
-        const result = await tryGemini({
-          apiKey, count: size, language: lang, difficulty, modelName, excludeQuestions,
-        });
-        if (result.questions.length > 0) return result;
-      } catch (err) {
-        lastError = err.message || String(err);
-        console.warn(`[quizAgent] model ${modelName} size=${size} failed:`, lastError);
-      }
-    }
-    return { error: lastError };
-  };
-
-  const full = await tryWithSize(count);
-  if (full && full.questions) return full;
-  const reduced = await tryWithSize(Math.max(5, Math.floor(count / 2)));
-  if (reduced && reduced.questions) return reduced;
-  return { ok: false, error: full?.error || reduced?.error || 'Quiz AI temporarily unavailable.' };
+  try {
+    return await tryGenerate({
+      count: Math.max(5, Math.floor(count / 2)),
+      language: lang, difficulty, excludeQuestions,
+    });
+  } catch (err) {
+    return { ok: false, error: err.message || 'Quiz AI temporarily unavailable.' };
+  }
 }
 
 module.exports = quizAgent;

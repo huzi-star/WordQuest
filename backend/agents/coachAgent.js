@@ -1,64 +1,50 @@
-// coachAgent.js
-// End-of-session AI coach. Gemini reviews the player's whole session and
-// gives a personalized analysis: strengths, weaknesses, recommended words
-// to practice. Falls back to derived rules when Gemini is offline.
+// coachAgent.js — End-of-session AI coach (OpenAI gpt-4o-mini).
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { generate, isConfigured } = require('../utils/llm');
 
 function analyzeLocally(stats) {
   const {
-    totalScore = 0,
-    rounds = 0,
-    bestStreak = 0,
-    badgesCount = 0,
-    avgWordsPerRound = 0,
-    avgTimeLeftPerRound = 0,
-    categoriesPlayed = [],
+    totalScore = 0, rounds = 0, bestStreak = 0, badgesCount = 0,
+    avgWordsPerRound = 0, avgTimeLeftPerRound = 0,
     weakCategories = [],
   } = stats;
 
   const strengths = [];
   const improvements = [];
+  if (avgTimeLeftPerRound > 30) strengths.push('You play fast — time bonuses keep stacking up.');
+  if (avgWordsPerRound >= 4) strengths.push('Strong word recognition — you find most words on the board.');
+  if (bestStreak >= 5) strengths.push(`Streak of ${bestStreak} — your focus is solid.`);
+  if (badgesCount >= 3) strengths.push('Achievement hunter — you collect badges consistently.');
+  if (strengths.length === 0) strengths.push('You keep improving — every round teaches something.');
 
-  if (avgTimeLeftPerRound > 30) strengths.push('Tum bohot fast ho — time bonus regularly milta hai.');
-  if (avgWordsPerRound >= 4) strengths.push('Word recognition strong hai — most words spot kar lete ho.');
-  if (bestStreak >= 5) strengths.push(`Streak ${bestStreak} — focus tumhara mazboot hai.`);
-  if (badgesCount >= 3) strengths.push('Badges collector! Achievement hunting style mein khelte ho.');
-  if (strengths.length === 0) strengths.push('Tum consistently improve kar rahe ho — har round se seekha.');
-
-  if (avgWordsPerRound < 3) improvements.push('Aur words spot karne ki practice karo — horizontal/vertical patterns dekho.');
-  if (avgTimeLeftPerRound < 15) improvements.push('Time pressure feel ho raha — pehle category samjho phir search.');
-  if (weakCategories.length) improvements.push(`Ye categories thori mushkil rahi: ${weakCategories.join(', ')}.`);
-  if (improvements.length === 0) improvements.push('Aur hard difficulty try karo — limits push karo!');
-
-  const practice = [];
-  if (weakCategories.includes('Urdu Words')) practice.push('MOHABBAT', 'SUKOON');
-  if (weakCategories.includes('Cricket Players')) practice.push('SHAHEEN', 'RIZWAN');
-  if (weakCategories.includes('Pakistani Foods')) practice.push('HALEEM', 'NIHARI');
-  if (!practice.length) practice.push('IQBAL', 'LAHORE', 'BIRYANI');
+  if (avgWordsPerRound < 3) improvements.push('Spot more words — scan rows, columns and diagonals first.');
+  if (avgTimeLeftPerRound < 15) improvements.push('Take a beat to read the category before searching.');
+  if (weakCategories.length) improvements.push(`These categories tripped you up: ${weakCategories.join(', ')}.`);
+  if (improvements.length === 0) improvements.push('Push to higher difficulty — your limits are still rising.');
 
   return {
-    headline: rounds >= 5 ? `Solid ${rounds}-round session — score ${totalScore}!` : `Achi shuruwat — ${rounds} round khele.`,
+    headline: rounds >= 5
+      ? `Solid ${rounds}-round session — total score ${totalScore}.`
+      : `Nice start — ${rounds} round${rounds === 1 ? '' : 's'} in the books.`,
     strengths,
     improvements,
-    practice,
+    practice: [],
     nextMove: bestStreak >= 4
-      ? 'Next session: hard difficulty try karo, streak push karo.'
-      : 'Next session: warm-up easy se start karo, phir medium try karo.',
+      ? 'Next time, try hard mode and chase a longer streak.'
+      : 'Warm up on easy, then bump to medium next session.',
   };
 }
 
-async function coachAgent(stats) {
-  const language = (stats && stats.language) || 'urdu';
-  const local = analyzeLocally(stats || {});
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'your_key_here') return local;
+async function coachAgent(stats = {}) {
+  const local = analyzeLocally(stats);
+  if (!isConfigured()) return local;
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const language = stats.language || 'english';
+  const langInstruction = language === 'english'
+    ? 'All copy in clear, motivating English (15 words max per bullet).'
+    : 'All copy in Roman Urdu mixed with English (Pakistani trainer voice, 15 words max per bullet).';
 
-    const prompt = `You are a friendly personal AI coach for a Pakistani word puzzle game.
+  const prompt = `You are a friendly personal AI coach for a word puzzle game.
 The player just finished a session. Analyze and give personalized feedback.
 
 Session stats:
@@ -69,26 +55,22 @@ Session stats:
 - Avg words per round: ${(stats.avgWordsPerRound || 0).toFixed(1)}
 - Avg time left per round: ${(stats.avgTimeLeftPerRound || 0).toFixed(0)}s
 - Categories played: ${(stats.categoriesPlayed || []).join(', ') || 'mixed'}
-- Categories where they struggled: ${(stats.weakCategories || []).join(', ') || 'none specific'}
 
-Return STRICTLY valid JSON with these keys (no markdown, no extra text):
+Return STRICTLY valid JSON with these keys:
 {
-  "headline": "single-sentence summary of the session (Roman Urdu mix)",
+  "headline": "single-sentence summary of the session",
   "strengths": ["2-3 short bullets about what they did well"],
-  "improvements": ["2-3 short bullets about what to improve"],
-  "practice": ["3-5 SPECIFIC UPPERCASE words from Pakistani categories they should practice"],
-  "nextMove": "one-sentence recommendation for the next session"
+  "improvements": ["2-3 short bullets about what to improve"]
 }
+${langInstruction}`;
 
-${language === 'english'
-  ? 'All copy in clear, motivating English (15 words max per bullet).'
-  : 'All copy in Roman Urdu mixed with English (Pakistani trainer voice, 15 words max per bullet).'}`;
-
-    const result = await Promise.race([
-      model.generateContent(prompt),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('coach timeout')), 22000)),
-    ]);
-    const text = result.response.text().trim();
+  try {
+    const text = await generate(prompt, {
+      timeoutMs: 16000,
+      temperature: 0.7,
+      maxTokens: 600,
+      responseFormat: 'json',
+    });
     const cleaned = text.replace(/```json|```/g, '').trim();
     const jsonStart = cleaned.indexOf('{');
     const jsonEnd = cleaned.lastIndexOf('}');
@@ -97,8 +79,8 @@ ${language === 'english'
       headline: parsed.headline || local.headline,
       strengths: Array.isArray(parsed.strengths) && parsed.strengths.length ? parsed.strengths : local.strengths,
       improvements: Array.isArray(parsed.improvements) && parsed.improvements.length ? parsed.improvements : local.improvements,
-      practice: Array.isArray(parsed.practice) && parsed.practice.length ? parsed.practice.map(w => String(w).toUpperCase()) : local.practice,
-      nextMove: parsed.nextMove || local.nextMove,
+      practice: [],
+      nextMove: '',
     };
   } catch (err) {
     return local;
