@@ -48,6 +48,9 @@ const DEFAULTS = {
   // Per-user onboarding flag — only true after the user finishes the
   // first-launch walkthrough.
   hasSeenOnboarding: false,
+  // Per-level personal best: { [levelNumber]: bestScore }. Shown on the
+  // Levels screen so the player can chase their own record.
+  levelHighScores: {},
 };
 
 function todayKey() {
@@ -224,6 +227,26 @@ export async function markDailyAttempt() {
     const next = { ...current, dailyChallengeLastAttemptAt: Date.now() };
     await AsyncStorage.setItem(K(), JSON.stringify(next));
     return next;
+  } catch { return null; }
+}
+
+// Record a score against a specific level number, keeping the highest
+// value seen for that level. Returns { previousBest, newBest, isNewBest }.
+export async function recordLevelScore(levelNumber, score) {
+  if (!levelNumber || !Number.isFinite(score)) return null;
+  try {
+    const current = await loadStats();
+    const map = { ...(current.levelHighScores || {}) };
+    const previousBest = Number(map[levelNumber]) || 0;
+    const newBest = Math.max(previousBest, Number(score) || 0);
+    map[levelNumber] = newBest;
+    const next = { ...current, levelHighScores: map };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return {
+      previousBest,
+      newBest,
+      isNewBest: score > previousBest && score > 0,
+    };
   } catch { return null; }
 }
 

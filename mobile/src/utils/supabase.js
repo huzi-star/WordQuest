@@ -113,6 +113,9 @@ export async function upsertStats(userId, stats, prefs = {}) {
       dailyChallengeLastAttemptAt: Number(stats.dailyChallengeLastAttemptAt) || 0,
       quizLastAttemptAt: Number(stats.quizLastAttemptAt) || 0,
       hasSeenOnboarding: !!stats.hasSeenOnboarding,
+      // Per-level high scores — synced so the player keeps their bests
+      // across devices and logins.
+      levelHighScores: stats.levelHighScores || {},
     },
     updated_at: new Date().toISOString(),
   };
@@ -120,6 +123,27 @@ export async function upsertStats(userId, stats, prefs = {}) {
     .from('user_stats')
     .upsert(payload, { onConflict: 'user_id' });
   if (error) console.warn('upsertStats error:', error.message);
+}
+
+// Change password — verifies the current password by re-signing in, then
+// updates to the new password. Both checks talk to the live Supabase auth
+// backend so the change persists on the server immediately.
+export async function changePassword({ email, currentPassword, newPassword }) {
+  if (!supabase) return { error: 'Supabase not configured' };
+  if (!email || !currentPassword || !newPassword) {
+    return { error: 'All password fields are required.' };
+  }
+  // 1. Verify the current password by attempting a sign-in.
+  const verify = await supabase.auth.signInWithPassword({
+    email, password: currentPassword,
+  });
+  if (verify.error) {
+    return { error: 'Current password is incorrect.' };
+  }
+  // 2. Update to the new password.
+  const update = await supabase.auth.updateUser({ password: newPassword });
+  if (update.error) return { error: update.error.message };
+  return { ok: true };
 }
 
 export async function deleteUserStats(userId) {

@@ -18,6 +18,7 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import QuizScreen from './src/screens/QuizScreen';
 import LevelsScreen from './src/screens/LevelsScreen';
 import AuthScreen from './src/screens/AuthScreen';
+import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
 import { AuthProvider } from './src/utils/auth';
 import AnimatedSplash from './src/components/AnimatedSplash';
 import { SettingsProvider, useSettings } from './src/utils/settings';
@@ -89,6 +90,7 @@ function Navigator() {
       <Stack.Screen name="Quiz" component={QuizScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }} />
       <Stack.Screen name="Levels" component={LevelsScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }} />
       <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }} />
+      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ headerShown: false, cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }} />
     </Stack.Navigator>
   );
 }

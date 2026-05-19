@@ -224,7 +224,7 @@ export default function HomeScreen({ navigation }) {
             >
               <Text style={styles.smallEmoji}>❓</Text>
               <Text style={[styles.smallTitle, { color: theme.accent2 }]}>Quiz</Text>
-              <Text style={styles.smallSub}>8 AI questions</Text>
+              <Text style={styles.smallSub}>20 AI questions</Text>
             </TouchableOpacity>
           </Animated.View>
 

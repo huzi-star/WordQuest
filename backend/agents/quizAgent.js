@@ -68,11 +68,18 @@ Return STRICTLY valid JSON only (no markdown, no commentary):
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.5-flash',
-    generationConfig: { temperature: 1.15, topP: 0.95 },
+    generationConfig: {
+      temperature: 0.95,
+      topP: 0.9,
+      // Bound response size — 20 MCQs with explanations ~ 4-6k tokens.
+      maxOutputTokens: 4096,
+    },
   });
+  // Per-attempt timeout. Vercel's serverless function has ~30s total, so
+  // keep each attempt under ~12s to leave room for retries.
   const result = await Promise.race([
     model.generateContent(prompt),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 22000)),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000)),
   ]);
   const text = result.response.text() || '';
   const cleaned = text.replace(/```json|```/g, '').trim();
@@ -120,17 +127,17 @@ async function quizAgent({
     return { ok: false, error: 'AI not configured. Set GEMINI_API_KEY on the backend.' };
   }
 
-  // Try up to 3 times with widening creativity if the first attempt returns
-  // empty / duplicate / parse-error.
+  // Try twice — first with full constraints, second with a relaxed
+  // duplicate-rejection set if the first parse fails. Two ~12s attempts
+  // fit comfortably inside Vercel's 30s function budget.
   let lastError = '';
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const result = await tryGemini({
         apiKey, count, language: lang, difficulty,
-        excludeTopics, excludeQuestions,
+        excludeTopics: attempt === 0 ? excludeTopics : [],
+        excludeQuestions: attempt === 0 ? excludeQuestions : [],
       });
-      // If the model returned fewer than requested questions, still return
-      // what we got — better some than none.
       if (result.questions.length > 0) return result;
     } catch (err) {
       lastError = err.message;

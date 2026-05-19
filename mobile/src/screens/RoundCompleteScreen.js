@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { roundComplete } from '../utils/api';
-import { saveStats, logRound, completeLevel, markDailyAttempt } from '../utils/storage';
+import { saveStats, logRound, completeLevel, markDailyAttempt, recordLevelScore } from '../utils/storage';
 import { useSettings } from '../utils/settings';
 import { useAuth } from '../utils/auth';
 import Confetti from '../components/Confetti';
@@ -66,9 +66,10 @@ export default function RoundCompleteScreen({ navigation, route }) {
         hintsUsed: roundResult.hintsUsed || 0,
       });
       // If this was a numbered level (1-15) and the player completed it,
-      // unlock the next level.
+      // unlock the next level AND record their score as the level's best.
       if (roundResult.levelNumber > 0 && roundResult.wordsFound === roundResult.totalWords) {
         await completeLevel(roundResult.levelNumber);
+        await recordLevelScore(roundResult.levelNumber, roundResult.roundScore || 0);
       }
       // Daily challenge: always mark as attempted (locks for 12 h).
       if (roundResult.isDaily) {

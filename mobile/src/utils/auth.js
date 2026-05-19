@@ -96,6 +96,17 @@ export function AuthProvider({ children }) {
       ),
       // Level retry word cache — local-only.
       levelWordCache: localCurrent.levelWordCache || {},
+      // Per-level high scores: merge remote with local, taking the max
+      // for each level so neither device wipes the other's record.
+      levelHighScores: (() => {
+        const remoteMap = (remote.preferences && remote.preferences.levelHighScores) || {};
+        const localMap = localCurrent.levelHighScores || {};
+        const merged = { ...remoteMap };
+        for (const k of Object.keys(localMap)) {
+          merged[k] = Math.max(Number(merged[k]) || 0, Number(localMap[k]) || 0);
+        }
+        return merged;
+      })(),
     };
     await replaceStats(snapshot);
 

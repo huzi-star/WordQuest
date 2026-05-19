@@ -157,6 +157,7 @@ function LevelTile({ n, stats, theme, onPress }) {
   const cfg = LEVEL_TABLE[n];
   const tierColor = colorFor(n, theme);
   const borderColor = isCompleted ? theme.gold : isUnlocked ? tierColor : '#1e293b';
+  const bestScore = Number((stats.levelHighScores || {})[n]) || 0;
 
   return (
     <TouchableOpacity
@@ -209,6 +210,11 @@ function LevelTile({ n, stats, theme, onPress }) {
             <Text style={styles.tileWords}>🔤 {cfg.wordCount}</Text>
             <Text style={styles.tileWords}>⏱ {cfg.timeLimit}s</Text>
           </View>
+          {bestScore > 0 ? (
+            <Text style={[styles.bestScore, { color: theme.gold }]}>
+              🏆 {bestScore.toLocaleString()}
+            </Text>
+          ) : null}
         </View>
       ) : (
         <View style={[styles.lockIconWrap, { borderColor: '#334155' }]}>
@@ -275,6 +281,7 @@ const styles = StyleSheet.create({
   tileMeta: { fontSize: 13, fontWeight: '900', letterSpacing: 1 },
   tileMetaRow: { flexDirection: 'row', gap: 6, marginTop: 2 },
   tileWords: { color: '#94a3b8', fontSize: 10, fontWeight: '700' },
+  bestScore: { fontSize: 10, fontWeight: '900', marginTop: 4, letterSpacing: 0.5 },
   lockIconWrap: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: 'rgba(15,23,42,0.7)', borderWidth: 1,

@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Vibration, Alert, BackHandler } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Vibration, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import WordGrid from '../components/WordGrid';
 import WordList from '../components/WordList';
 import Timer from '../components/Timer';
 import AgentThinking from '../components/AgentThinking';
+import ConfirmModal from '../components/ConfirmModal';
 import ScorePopup from '../components/ScorePopup';
 import Confetti from '../components/Confetti';
 import { validateWord, explainWord } from '../utils/api';
@@ -108,30 +109,23 @@ export default function GameScreen({ navigation, route }) {
   }, [paused]);
 
   // Single source of truth for the leave-game flow. Pauses the timer while
-  // the dialog is open, resumes on continue, exits on confirm.
+  // the dialog is open, resumes on continue, exits on confirm. The modal
+  // visibility is held in component state so it shows a premium custom UI
+  // instead of the platform's default Alert.
+  const [leaveModalOpen, setLeaveModalOpen] = useState(false);
   function confirmLeave() {
     setPaused(true);
-    Alert.alert(
-      'Leave game?',
-      'Your current progress will be lost.',
-      [
-        {
-          text: 'Continue Playing',
-          style: 'cancel',
-          onPress: () => setPaused(false),
-        },
-        {
-          text: 'Leave Game',
-          style: 'destructive',
-          onPress: () => {
-            navigation.replace('GameOver', {
-              sessionStats: { ...sessionStats, score, streak },
-            });
-          },
-        },
-      ],
-      { cancelable: true, onDismiss: () => setPaused(false) },
-    );
+    setLeaveModalOpen(true);
+  }
+  function continuePlaying() {
+    setLeaveModalOpen(false);
+    setPaused(false);
+  }
+  function leaveGame() {
+    setLeaveModalOpen(false);
+    navigation.replace('GameOver', {
+      sessionStats: { ...sessionStats, score, streak },
+    });
   }
 
   // Track which milestones we've already commented on this round.
@@ -633,6 +627,18 @@ export default function GameScreen({ navigation, route }) {
       ))}
 
       <Confetti visible={showConfetti} onDone={() => setShowConfetti(false)} />
+
+      <ConfirmModal
+        visible={leaveModalOpen}
+        icon="🚪"
+        title="Leave Game?"
+        message="Your current round progress and score will be lost. The timer is paused."
+        cancelText="Continue Playing"
+        confirmText="Leave Game"
+        confirmVariant="danger"
+        onCancel={continuePlaying}
+        onConfirm={leaveGame}
+      />
     </SafeAreaView>
   );
 }

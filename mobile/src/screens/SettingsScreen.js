@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings } from '../utils/settings';
 import { useTheme, THEMES } from '../utils/theme';
@@ -7,6 +7,7 @@ import { resetStats } from '../utils/storage';
 import { useAuth } from '../utils/auth';
 import { signOut, deleteUserStats } from '../utils/supabase';
 import { CommonActions } from '@react-navigation/native';
+import ConfirmModal from '../components/ConfirmModal';
 
 function Row({ icon, title, subtitle, right }) {
   return (
@@ -25,24 +26,18 @@ export default function SettingsScreen({ navigation }) {
   const { settings, setSetting, t } = useSettings();
   const theme = useTheme();
   const { user, configured } = useAuth();
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetDoneOpen, setResetDoneOpen] = useState(false);
 
   function confirmReset() {
-    Alert.alert(
-      t('reset_confirm_title'),
-      t('reset_confirm_msg'),
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('reset_stats'),
-          style: 'destructive',
-          onPress: async () => {
-            await resetStats();
-            if (user) await deleteUserStats(user.id);
-            Alert.alert(t('done'), '');
-          },
-        },
-      ],
-    );
+    setResetOpen(true);
+  }
+
+  async function doReset() {
+    setResetOpen(false);
+    await resetStats();
+    if (user) await deleteUserStats(user.id);
+    setResetDoneOpen(true);
   }
 
   return (
@@ -72,6 +67,15 @@ export default function SettingsScreen({ navigation }) {
                   subtitle={user.email}
                 />
                 <View style={styles.divider} />
+                <TouchableOpacity onPress={() => navigation.navigate('ChangePassword')}>
+                  <Row
+                    icon="🔐"
+                    title="Change Password"
+                    subtitle="Update your account password"
+                    right={<Text style={[styles.dangerArrow, { color: theme.accent }]}>→</Text>}
+                  />
+                </TouchableOpacity>
+                <View style={styles.divider} />
                 <TouchableOpacity
                   onPress={async () => {
                     await signOut();
@@ -80,7 +84,7 @@ export default function SettingsScreen({ navigation }) {
                     );
                   }}
                 >
-                  <Row icon="🚪" title="Sign out" subtitle="Login screen pe wapas" right={<Text style={styles.dangerArrow}>→</Text>} />
+                  <Row icon="🚪" title="Sign out" subtitle="Back to login screen" right={<Text style={styles.dangerArrow}>→</Text>} />
                 </TouchableOpacity>
               </>
             ) : (
@@ -205,6 +209,28 @@ export default function SettingsScreen({ navigation }) {
           <View style={{ height: 30 }} />
         </ScrollView>
       </SafeAreaView>
+
+      <ConfirmModal
+        visible={resetOpen}
+        icon="🗑"
+        title="Reset All Stats?"
+        message="All scores, streaks, badges, level progress, and category mastery will be permanently erased. Daily Challenge and Quiz cooldowns will be preserved. This cannot be undone."
+        cancelText="Cancel"
+        confirmText="Reset"
+        confirmVariant="danger"
+        onCancel={() => setResetOpen(false)}
+        onConfirm={doReset}
+      />
+      <ConfirmModal
+        visible={resetDoneOpen}
+        icon="✅"
+        title="Stats Reset"
+        message="Your gameplay stats have been wiped. Daily Challenge and Quiz Mode are untouched."
+        cancelText="Close"
+        confirmText="Got it"
+        onCancel={() => setResetDoneOpen(false)}
+        onConfirm={() => setResetDoneOpen(false)}
+      />
     </View>
   );
 }

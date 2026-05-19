@@ -121,6 +121,15 @@ export default function QuizScreen({ navigation }) {
 
   async function finishQuiz() {
     setDone(true);
+    // Each correct answer is worth POINTS_PER_CORRECT — total goes into
+    // the global high score so quiz performance counts towards the
+    // player's overall record.
+    const totalQuizScore = correctCount * POINTS_PER_CORRECT;
+    try {
+      // eslint-disable-next-line global-require
+      const { saveStats } = require('../utils/storage');
+      await saveStats({ highScore: totalQuizScore });
+    } catch {}
     await markQuizAttempt();
   }
 
