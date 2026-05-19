@@ -19,8 +19,12 @@ const VARIETY_TOPICS = [
   'American presidents', 'space missions', 'inventors',
 ];
 
+// Cascade of models: prefer 2.5-flash for quality, fall back to 1.5-flash
+// (1500 RPD free quota) when the primary is rate-limited.
+const QUIZ_MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
+
 async function tryGemini({
-  apiKey, count, language, difficulty, excludeTopics = [], excludeQuestions = [],
+  apiKey, count, language, difficulty, modelName, excludeTopics = [], excludeQuestions = [],
 }) {
   const langInstruction = language === 'urdu'
     ? 'All questions, options and explanations in Roman Urdu mixed with English (Pakistani conversational style).'
@@ -67,7 +71,7 @@ Return STRICTLY valid JSON only (no markdown, no commentary):
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: modelName || 'gemini-2.5-flash',
     generationConfig: {
       temperature: 0.95,
       topP: 0.9,
@@ -127,21 +131,22 @@ async function quizAgent({
     return { ok: false, error: 'AI not configured. Set GEMINI_API_KEY on the backend.' };
   }
 
-  // Try twice — first with full constraints, second with a relaxed
-  // duplicate-rejection set if the first parse fails. Two ~12s attempts
-  // fit comfortably inside Vercel's 30s function budget.
+  // Try each model in the cascade. On a 429 (quota) or transient error,
+  // move to the next model with a higher free-tier limit. This keeps the
+  // quiz working even when the primary model's daily quota is exhausted.
   let lastError = '';
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (const modelName of QUIZ_MODELS) {
     try {
       const result = await tryGemini({
-        apiKey, count, language: lang, difficulty,
-        excludeTopics: attempt === 0 ? excludeTopics : [],
-        excludeQuestions: attempt === 0 ? excludeQuestions : [],
+        apiKey, count, language: lang, difficulty, modelName,
+        excludeTopics, excludeQuestions,
       });
       if (result.questions.length > 0) return result;
     } catch (err) {
-      lastError = err.message;
-      console.warn(`[quizAgent] attempt ${attempt + 1} failed:`, err.message);
+      lastError = err.message || String(err);
+      console.warn(`[quizAgent] model ${modelName} failed:`, lastError);
+      // Only continue the cascade for transient / rate-limit failures.
+      // For parse errors we still try the next model.
     }
   }
   return { ok: false, error: lastError || 'Quiz AI is slow right now. Try again in a moment.' };
