@@ -5,6 +5,8 @@ import axios from 'axios';
 export const BASE_URL = 'https://backend-liart-three-60.vercel.app';
 
 const client = axios.create({ baseURL: BASE_URL, timeout: 25000 });
+// Long-running endpoints (quiz/coach) get a separate longer-timeout client.
+const slowClient = axios.create({ baseURL: BASE_URL, timeout: 75000 });
 
 // Global language injector. Set from SettingsProvider at app boot/change.
 let globalLanguage = 'urdu';
@@ -72,8 +74,9 @@ export async function getCoach(stats) {
 
 export async function generateQuiz(payload) {
   try {
-    // payload may carry excludeTopics already; withLang preserves extras.
-    const { data } = await client.post('/api/generate-quiz', withLang(payload || {}));
+    // Quiz generation can take up to 50s on the backend (Gemini latency +
+    // retries) — use the slow client so axios doesn't abort early.
+    const { data } = await slowClient.post('/api/generate-quiz', withLang(payload || {}));
     return data;
   } catch (err) {
     return { ok: false, error: err.message };

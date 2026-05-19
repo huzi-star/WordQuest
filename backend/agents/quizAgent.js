@@ -10,11 +10,9 @@ const VARIETY_TOPICS = [
   'mythology', 'technology', 'art', 'capital cities', 'famous people',
 ];
 
-// Single lightweight model — cheapest path through free-tier quota. The
-// quiz only needs basic factual questions, not deep reasoning.
-// Preview models have their own quota buckets — cascading lets us survive
-// when 2.x flash quotas are exhausted for the day.
-const QUIZ_MODELS = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+// gemini-3-flash-preview has its own fresh quota bucket and is fast enough
+// for a 20-question quiz. We add 2.5-flash as a single backup attempt.
+const QUIZ_MODELS = ['gemini-3-flash-preview', 'gemini-2.5-flash'];
 
 async function tryGemini({ apiKey, count, language, difficulty, modelName, excludeQuestions = [] }) {
   const langInstruction = language === 'urdu'
@@ -51,10 +49,11 @@ Return ONLY this JSON (no markdown):
       maxOutputTokens: 3500,
     },
   });
-  // Vercel maxDuration is 60s so we have room for two real attempts.
+  // 20s per attempt × 2 models × 2 sizes = 80s worst case. Vercel's 60s
+  // budget keeps actual flows shorter; client allows 75s.
   const result = await Promise.race([
     model.generateContent(prompt),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000)),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 20000)),
   ]);
   const text = result.response.text() || '';
   const cleaned = text.replace(/```json|```/g, '').trim();
