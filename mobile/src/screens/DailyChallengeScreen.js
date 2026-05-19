@@ -249,7 +249,7 @@ export default function DailyChallengeScreen({ navigation }) {
         <View style={styles.tipBox}>
           <Text style={styles.tipIcon}>⚠️</Text>
           <Text style={styles.tipText}>
-            After this attempt, Daily Challenge locks for {LOCK_HOURS} hours — next puzzle drops when the countdown ends.
+            After this attempt, Daily Challenge locks until midnight — a fresh puzzle drops at 00:00 every day.
           </Text>
         </View>
 
