@@ -84,9 +84,15 @@ export default function AuthScreen({ navigation }) {
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
         >
-          <ScrollView contentContainerStyle={styles.scroll}>
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            automaticallyAdjustKeyboardInsets
+          >
             <Animated.View style={[styles.heroWrap, { opacity: fadeIn, transform: [{ scale: logoScale }] }]}>
               <View style={[styles.logoCircle, { borderColor: theme.accent, shadowColor: theme.accent }]}>
                 <Image source={require('../../app-logo.jpeg')} style={styles.logoImg} />

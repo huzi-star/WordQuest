@@ -3,8 +3,10 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { saveStats } from '../utils/storage';
 import { getCoach } from '../utils/api';
+import { useTheme } from '../utils/theme';
 
 export default function GameOverScreen({ navigation, route }) {
+  const theme = useTheme();
   const { sessionStats = {} } = route.params || {};
   const {
     score = 0,
@@ -12,7 +14,6 @@ export default function GameOverScreen({ navigation, route }) {
     streak = 0,
     bestStreak = 0,
     highScore = 0,
-    badges = [],
     history = [],
   } = sessionStats;
 
@@ -38,11 +39,11 @@ export default function GameOverScreen({ navigation, route }) {
       totalScore: score,
       rounds: totalRounds,
       bestStreak: Math.max(bestStreak, streak),
-      badgesCount: badges.length,
       avgWordsPerRound: avgWords,
       avgTimeLeftPerRound: avgTime,
       categoriesPlayed: Array.from(new Set(history.map(h => h.category).filter(Boolean))),
       weakCategories: Array.from(new Set(weakCategories)),
+      language: 'english',
     }).then(res => {
       setCoach(res?.ok ? res.result : null);
       setCoachLoading(false);
@@ -50,137 +51,132 @@ export default function GameOverScreen({ navigation, route }) {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.heading}>Game Over! 🎮</Text>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <View style={[styles.blob, { backgroundColor: theme.accent, top: -120, right: -100 }]} />
+      <View style={[styles.blob, { backgroundColor: theme.accent2, bottom: -140, left: -100, opacity: 0.13 }]} />
 
-        <View style={styles.bigCard}>
-          <Text style={styles.bigLabel}>Final Score</Text>
-          <Text style={styles.bigScore}>{score}</Text>
-        </View>
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <Text style={styles.heading}>Game Over 🎮</Text>
 
-        <View style={styles.row}>
-          <View style={styles.card}>
-            <Text style={styles.label}>Rounds</Text>
-            <Text style={styles.value}>{totalRounds}</Text>
-          </View>
-          <View style={styles.card}>
-            <Text style={styles.label}>Best Streak</Text>
-            <Text style={styles.value}>🔥 {Math.max(bestStreak, streak)}</Text>
-          </View>
-          <View style={styles.card}>
-            <Text style={styles.label}>High Score</Text>
-            <Text style={styles.value}>🏆 {Math.max(highScore, score)}</Text>
-          </View>
-        </View>
-
-        {badges.length ? (
-          <View style={styles.badgesCard}>
-            <Text style={styles.sectionLabel}>🏅 Badges Earned</Text>
-            {badges.map((b, i) => (
-              <Text key={`${b.id}-${i}`} style={styles.badgeLine}>{b.name} — {b.message}</Text>
-            ))}
-          </View>
-        ) : null}
-
-        <View style={styles.coachCard}>
-          <Text style={styles.sectionLabel}>🤖 AI Coach Analysis</Text>
-          {coachLoading ? (
-            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
-              <ActivityIndicator color="#22c55e" />
-              <Text style={styles.coachLoadingText}>Gemini is analyzing your performance...</Text>
+          {/* Compact stat strip — no big Final Score box */}
+          <View style={styles.row}>
+            <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <Text style={styles.statLabel}>ROUNDS</Text>
+              <Text style={styles.statValue}>{totalRounds}</Text>
             </View>
-          ) : coach ? (
-            <View style={{ gap: 10 }}>
-              <Text style={styles.headline}>{coach.headline}</Text>
+            <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <Text style={styles.statLabel}>BEST STREAK</Text>
+              <Text style={[styles.statValue, { color: '#f97316' }]}>🔥 {Math.max(bestStreak, streak)}</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.gold }]}>
+              <Text style={[styles.statLabel, { color: theme.gold }]}>HIGH SCORE</Text>
+              <Text style={[styles.statValue, { color: theme.gold }]}>🏆 {Math.max(highScore, score)}</Text>
+            </View>
+          </View>
 
-              <Text style={styles.subhead}>💪 Your strengths:</Text>
-              {coach.strengths.map((s, i) => (
-                <Text key={`s${i}`} style={styles.bullet}>• {s}</Text>
-              ))}
+          {/* AI Coach card — English only, no practice words, no next-session line */}
+          <View style={[styles.coachCard, { backgroundColor: theme.card, borderColor: theme.accent }]}>
+            <View style={styles.coachHeader}>
+              <Text style={styles.coachAvatar}>🤖</Text>
+              <Text style={[styles.coachTitle, { color: theme.accent }]}>AI COACH ANALYSIS</Text>
+            </View>
 
-              <Text style={styles.subhead}>📈 Areas to improve:</Text>
-              {coach.improvements.map((s, i) => (
-                <Text key={`i${i}`} style={styles.bullet}>• {s}</Text>
-              ))}
+            {coachLoading ? (
+              <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                <ActivityIndicator color={theme.accent} />
+                <Text style={styles.coachLoadingText}>Analyzing your performance…</Text>
+              </View>
+            ) : coach ? (
+              <View style={{ gap: 10 }}>
+                {coach.headline ? (
+                  <Text style={[styles.headline, { color: theme.gold }]}>{coach.headline}</Text>
+                ) : null}
 
-              <Text style={styles.subhead}>🎯 Practice these words:</Text>
-              <View style={styles.practiceRow}>
-                {coach.practice.map((w, i) => (
-                  <View key={`p${i}`} style={styles.practiceChip}>
-                    <Text style={styles.practiceText}>{w}</Text>
-                  </View>
+                <Text style={[styles.subhead, { color: theme.accent }]}>💪 Your strengths</Text>
+                {(coach.strengths || []).map((s, i) => (
+                  <Text key={`s${i}`} style={styles.bullet}>• {s}</Text>
+                ))}
+
+                <Text style={[styles.subhead, { color: theme.accent }]}>📈 Areas to improve</Text>
+                {(coach.improvements || []).map((s, i) => (
+                  <Text key={`i${i}`} style={styles.bullet}>• {s}</Text>
                 ))}
               </View>
+            ) : (
+              <Text style={styles.coachLoadingText}>Coach offline — try again later.</Text>
+            )}
+          </View>
 
-              <Text style={styles.nextMove}>👉 {coach.nextMove}</Text>
-            </View>
-          ) : (
-            <Text style={styles.coachLoadingText}>Coach offline — please try again later.</Text>
-          )}
-        </View>
+          <TouchableOpacity
+            style={[styles.statsBtn, { backgroundColor: theme.card, borderColor: theme.accent }]}
+            onPress={() => navigation.navigate('Stats')}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.statsBtnText, { color: theme.accent }]}>📊 My Stats Dashboard</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.statsBtn}
-          onPress={() => navigation.navigate('Stats')}
-        >
-          <Text style={styles.statsText}>📊 My Stats Dashboard</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.restartBtn, { backgroundColor: theme.accent, shadowColor: theme.accent }]}
+            activeOpacity={0.85}
+            onPress={() =>
+              navigation.replace('Category', {
+                playerStats: { roundsPlayed: 0, avgWordsFound: 0, avgTimeLeft: 0, currentStreak: 0, lastCategory: '' },
+                sessionStats: {
+                  score: 0, round: 1, streak: 0, badges: [], history: [],
+                  highScore: Math.max(highScore, score),
+                  bestStreak: Math.max(bestStreak, streak),
+                },
+              })
+            }
+          >
+            <Text style={[styles.restartText, { color: theme.bg }]}>🔄 Play Again</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.restartBtn}
-          onPress={() =>
-            navigation.replace('Category', {
-              playerStats: { roundsPlayed: 0, avgWordsFound: 0, avgTimeLeft: 0, currentStreak: 0, lastCategory: '' },
-              sessionStats: {
-                score: 0, round: 1, streak: 0, badges: [], history: [],
-                highScore: Math.max(highScore, score),
-                bestStreak: Math.max(bestStreak, streak),
-              },
-            })
-          }
-        >
-          <Text style={styles.restartText}>🔄 Play again</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.homeBtn, { backgroundColor: 'rgba(148,163,184,0.08)', borderColor: theme.border }]}
+            onPress={() => navigation.replace('Home')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.homeText}>🏠 Home</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.homeBtn}
-          onPress={() => navigation.replace('Home')}
-        >
-          <Text style={styles.homeText}>🏠 Home</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+          <View style={{ height: 30 }} />
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  scroll: { padding: 20, gap: 12, paddingBottom: 40 },
-  heading: { color: '#fff', fontSize: 28, fontWeight: 'bold', alignSelf: 'center' },
-  bigCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 22, alignItems: 'center', borderWidth: 1, borderColor: '#22c55e' },
-  bigLabel: { color: '#94a3b8' },
-  bigScore: { color: '#22c55e', fontSize: 48, fontWeight: 'bold', marginTop: 6 },
+  container: { flex: 1, overflow: 'hidden' },
+  blob: { position: 'absolute', width: 320, height: 320, borderRadius: 160, opacity: 0.13 },
+  scroll: { padding: 18, gap: 14 },
+  heading: { color: '#fff', fontSize: 28, fontWeight: '900', textAlign: 'center', letterSpacing: 0.5 },
+
   row: { flexDirection: 'row', gap: 10 },
-  card: { flex: 1, backgroundColor: '#1e293b', borderRadius: 12, padding: 12, alignItems: 'center' },
-  label: { color: '#94a3b8', fontSize: 12 },
-  value: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginTop: 4 },
-  badgesCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 14, gap: 6 },
-  sectionLabel: { color: '#22c55e', fontWeight: 'bold', fontSize: 16 },
-  badgeLine: { color: '#fff' },
-  coachCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#22c55e' },
-  coachLoadingText: { color: '#94a3b8', marginTop: 6 },
-  headline: { color: '#fcd34d', fontSize: 15, fontWeight: 'bold' },
-  subhead: { color: '#22c55e', fontWeight: 'bold', marginTop: 6 },
-  bullet: { color: '#fff', marginLeft: 6 },
-  practiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-  practiceChip: { backgroundColor: '#0f172a', borderColor: '#22c55e', borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
-  practiceText: { color: '#22c55e', fontWeight: 'bold', letterSpacing: 1 },
-  nextMove: { color: '#cbd5e1', marginTop: 6, fontStyle: 'italic' },
-  statsBtn: { backgroundColor: '#1e293b', borderColor: '#22c55e', borderWidth: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  statsText: { color: '#22c55e', fontWeight: 'bold', fontSize: 16 },
-  restartBtn: { backgroundColor: '#22c55e', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  restartText: { color: '#0f172a', fontWeight: 'bold', fontSize: 18 },
-  homeBtn: { backgroundColor: '#1e293b', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  homeText: { color: '#fff', fontWeight: 'bold' },
+  statCard: { flex: 1, borderWidth: 1, borderRadius: 14, padding: 12, alignItems: 'center' },
+  statLabel: { color: '#94a3b8', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+  statValue: { color: '#fff', fontSize: 18, fontWeight: '900', marginTop: 6 },
+
+  coachCard: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 8 },
+  coachHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  coachAvatar: { fontSize: 18 },
+  coachTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
+  coachLoadingText: { color: '#94a3b8', marginTop: 6, textAlign: 'center' },
+  headline: { fontSize: 15, fontWeight: '900' },
+  subhead: { fontWeight: '900', marginTop: 6, fontSize: 12, letterSpacing: 0.5 },
+  bullet: { color: '#fff', marginLeft: 6, lineHeight: 19 },
+
+  statsBtn: { paddingVertical: 14, borderRadius: 14, alignItems: 'center', borderWidth: 1 },
+  statsBtnText: { fontWeight: '900', fontSize: 14, letterSpacing: 0.5 },
+
+  restartBtn: {
+    paddingVertical: 16, borderRadius: 20, alignItems: 'center',
+    shadowOpacity: 0.45, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 10,
+  },
+  restartText: { fontWeight: '900', fontSize: 16, letterSpacing: 0.5 },
+
+  homeBtn: { paddingVertical: 14, borderRadius: 14, alignItems: 'center', borderWidth: 1 },
+  homeText: { color: '#cbd5e1', fontWeight: '700' },
 });
