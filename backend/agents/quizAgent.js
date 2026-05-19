@@ -12,7 +12,8 @@ const VARIETY_TOPICS = [
 
 // Single lightweight model — cheapest path through free-tier quota. The
 // quiz only needs basic factual questions, not deep reasoning.
-const QUIZ_MODELS = ['gemini-2.0-flash-lite'];
+// Order matters — first model is preferred. 2.5-flash is solid for trivia.
+const QUIZ_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
 
 async function tryGemini({ apiKey, count, language, difficulty, modelName, excludeQuestions = [] }) {
   const langInstruction = language === 'urdu'
