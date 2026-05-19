@@ -1,96 +1,59 @@
 // quizAgent.js — AI-only quiz generator.
-// No hardcoded question pool. Gemini generates everything, with retries
-// and aggressive variance so questions never repeat across runs.
+// Lean prompt + small cascade so the request fits inside the free-tier
+// per-minute token budget. No hardcoded question pool.
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const VARIETY_TOPICS = [
-  'world geography', 'ancient history', 'modern history', 'science discoveries',
-  'space and astronomy', 'pop culture', 'music', 'movies', 'sports',
-  'world cuisine', 'animals', 'inventions', 'famous people',
-  'literature', 'mythology', 'philosophy', 'world religions',
-  'technology', 'video games', 'art', 'languages', 'world currencies',
-  'capital cities', 'rivers and mountains', 'oceans', 'famous landmarks',
-  'wars and battles', 'nobel laureates', 'olympics', 'cricket',
-  'football', 'tennis', 'chemistry', 'physics', 'biology', 'medicine',
-  'mathematics', 'economics', 'business leaders', 'famous architects',
-  'Pakistani culture', 'Indian culture', 'Middle Eastern history',
-  'African geography', 'Asian art', 'European monarchies',
-  'American presidents', 'space missions', 'inventors',
+  'world geography', 'history', 'science', 'pop culture', 'music',
+  'movies', 'sports', 'animals', 'inventions', 'literature',
+  'mythology', 'technology', 'art', 'capital cities', 'famous people',
 ];
 
-// Cascade of models: prefer 2.5-flash for quality, fall back to 1.5-flash
-// (1500 RPD free quota) when the primary is rate-limited.
-// Cascade. Each model has its own free-tier quota bucket — moving down
-// the list lets the quiz keep working after the primary is exhausted.
 const QUIZ_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
   'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
 ];
 
-async function tryGemini({
-  apiKey, count, language, difficulty, modelName, excludeTopics = [], excludeQuestions = [],
-}) {
+async function tryGemini({ apiKey, count, language, difficulty, modelName, excludeQuestions = [] }) {
   const langInstruction = language === 'urdu'
-    ? 'All questions, options and explanations in Roman Urdu mixed with English (Pakistani conversational style).'
-    : 'All questions, options and explanations in clear, motivating English.';
+    ? 'Roman Urdu mixed with English (Pakistani style).'
+    : 'Clear English.';
 
-  // Pick 3 random seed topics each call to push Gemini towards genuinely
-  // different content even if the player retries the quiz repeatedly.
+  // Two random seed topics — keeps the prompt tiny and content varied.
+  const pool = [...VARIETY_TOPICS];
   const seeds = [];
-  const pool = VARIETY_TOPICS.filter((t) => !excludeTopics.includes(t));
-  while (seeds.length < 3 && pool.length) {
-    const idx = Math.floor(Math.random() * pool.length);
-    seeds.push(pool.splice(idx, 1)[0]);
+  while (seeds.length < 2 && pool.length) {
+    seeds.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
   }
-  const seedStr = seeds.join(', ');
 
-  const excludeTopicsHint = excludeTopics.length
-    ? `\nDO NOT use these topics (recently shown): ${excludeTopics.slice(0, 10).join(', ')}.`
-    : '';
-  // Trim each excluded question to keep the prompt small, but warn Gemini
-  // strongly against repeating them.
+  // Cap the exclude list to 5 short snippets to keep input tokens low.
   const excludeQHint = excludeQuestions.length
-    ? `\nDO NOT reuse, paraphrase, or duplicate any of these exact questions:\n- ${excludeQuestions.slice(0, 12).map((q) => String(q).slice(0, 120)).join('\n- ')}`
+    ? `\nAvoid repeating: ${excludeQuestions.slice(0, 5).map((q) => String(q).slice(0, 60)).join(' | ')}`
     : '';
-  const varianceSeed = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
-  const prompt = `You are an expert trivia quiz designer.
+  const prompt = `Generate ${count} multiple-choice trivia questions.
+Mix these themes: ${seeds.join(', ')}.
+Difficulty: ${difficulty}. ${langInstruction}${excludeQHint}
 
-Mix questions across these themes (pick a different focus each time): ${seedStr}.
-Difficulty: ${difficulty}.
-Variance token (must influence your output): ${varianceSeed}.
-${excludeTopicsHint}
-${excludeQHint}
-${langInstruction}
+Each question: exactly 4 options, ONE correct (correctIndex 0-3), one-sentence explanation.
 
-Generate exactly ${count} multiple-choice questions. Each must:
-- Be a real, factually accurate question (no made-up trivia).
-- Have exactly 4 plausible options with ONE clearly correct answer (index 0..3).
-- Include a short one-sentence explanation citing why the answer is right.
-- Be COMPLETELY DIFFERENT from any common quiz cliches (avoid "tallest mountain", "fastest animal", "largest ocean" etc unless directly relevant).
-- Span DIFFERENT topics — do not stack 5 questions in one theme.
-
-Return STRICTLY valid JSON only (no markdown, no commentary):
-{"topic":"...","topicEmoji":"...","questions":[{"question":"...","options":["a","b","c","d"],"correctIndex":0,"explanation":"..."}]}`;
+Return ONLY this JSON (no markdown):
+{"topic":"…","topicEmoji":"…","questions":[{"question":"…","options":["a","b","c","d"],"correctIndex":0,"explanation":"…"}]}`;
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: modelName || 'gemini-2.5-flash',
     generationConfig: {
-      temperature: 0.95,
+      temperature: 0.9,
       topP: 0.9,
-      // Bound response size — 20 MCQs with explanations ~ 4-6k tokens.
-      maxOutputTokens: 4096,
+      maxOutputTokens: 3500,
     },
   });
-  // Per-attempt timeout. Vercel's serverless function has ~30s total, so
-  // keep each attempt under ~12s to leave room for retries.
   const result = await Promise.race([
     model.generateContent(prompt),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000)),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 14000)),
   ]);
   const text = result.response.text() || '';
   const cleaned = text.replace(/```json|```/g, '').trim();
@@ -100,15 +63,9 @@ Return STRICTLY valid JSON only (no markdown, no commentary):
   const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
   const excludeSet = new Set((excludeQuestions || []).map((q) => String(q).toLowerCase().trim()));
   const questions = (parsed.questions || [])
-    .filter(
-      (q) =>
-        q &&
-        q.question &&
-        Array.isArray(q.options) &&
-        q.options.length === 4 &&
-        // Strict: skip anything we've already asked.
-        !excludeSet.has(String(q.question).toLowerCase().trim()),
-    )
+    .filter((q) =>
+      q && q.question && Array.isArray(q.options) && q.options.length === 4
+      && !excludeSet.has(String(q.question).toLowerCase().trim()))
     .slice(0, count)
     .map((q) => ({
       question: String(q.question),
@@ -125,10 +82,9 @@ Return STRICTLY valid JSON only (no markdown, no commentary):
 }
 
 async function quizAgent({
-  count = 8,
+  count = 20,
   language = 'english',
   difficulty = 'medium',
-  excludeTopics = [],
   excludeQuestions = [],
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -138,25 +94,31 @@ async function quizAgent({
     return { ok: false, error: 'AI not configured. Set GEMINI_API_KEY on the backend.' };
   }
 
-  // Try each model in the cascade. On a 429 (quota) or transient error,
-  // move to the next model with a higher free-tier limit. This keeps the
-  // quiz working even when the primary model's daily quota is exhausted.
-  let lastError = '';
-  for (const modelName of QUIZ_MODELS) {
-    try {
-      const result = await tryGemini({
-        apiKey, count, language: lang, difficulty, modelName,
-        excludeTopics, excludeQuestions,
-      });
-      if (result.questions.length > 0) return result;
-    } catch (err) {
-      lastError = err.message || String(err);
-      console.warn(`[quizAgent] model ${modelName} failed:`, lastError);
-      // Only continue the cascade for transient / rate-limit failures.
-      // For parse errors we still try the next model.
+  // Two-stage strategy:
+  // 1. Ask for the full count from each model in the cascade.
+  // 2. If all fail (likely free-tier RPM/RPD limits), fall back to a much
+  //    smaller request — 10 questions — so the player still gets a quiz.
+  const tryWithSize = async (size) => {
+    let lastError = '';
+    for (const modelName of QUIZ_MODELS) {
+      try {
+        const result = await tryGemini({
+          apiKey, count: size, language: lang, difficulty, modelName, excludeQuestions,
+        });
+        if (result.questions.length > 0) return result;
+      } catch (err) {
+        lastError = err.message || String(err);
+        console.warn(`[quizAgent] model ${modelName} size=${size} failed:`, lastError);
+      }
     }
-  }
-  return { ok: false, error: lastError || 'Quiz AI is slow right now. Try again in a moment.' };
+    return { error: lastError };
+  };
+
+  const full = await tryWithSize(count);
+  if (full && full.questions) return full;
+  const reduced = await tryWithSize(Math.max(5, Math.floor(count / 2)));
+  if (reduced && reduced.questions) return reduced;
+  return { ok: false, error: full?.error || reduced?.error || 'Quiz AI temporarily unavailable.' };
 }
 
 module.exports = quizAgent;
