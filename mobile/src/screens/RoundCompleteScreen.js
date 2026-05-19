@@ -230,6 +230,11 @@ export default function RoundCompleteScreen({ navigation, route }) {
             activeOpacity={0.9}
             style={[styles.primaryBtn, { shadowColor: accent }]}
             onPress={async () => {
+              // DAILY CHALLENGE (win OR lose) → single-round mode, head home.
+              if (isDailyRound) {
+                navigation.replace('Home');
+                return;
+              }
               // FAILED LEVEL → retry the SAME level (same words, new grid).
               if (isFailed && roundResult.levelNumber > 0) {
                 // eslint-disable-next-line global-require
@@ -246,11 +251,6 @@ export default function RoundCompleteScreen({ navigation, route }) {
                 });
                 return;
               }
-              // FAILED DAILY → can't retry today, go home.
-              if (isFailed && isDailyRound) {
-                navigation.replace('Home');
-                return;
-              }
               // PASSED LEVEL → advance to next level number.
               if (!isFailed && roundResult.levelNumber > 0) {
                 navigation.replace('Category', {
@@ -264,12 +264,14 @@ export default function RoundCompleteScreen({ navigation, route }) {
               navigation.replace('Category', { playerStats, sessionStats });
             }}
           >
-            <Text style={styles.primaryArrow}>{isFailed ? '↻' : '▶'}</Text>
+            <Text style={styles.primaryArrow}>
+              {isDailyRound ? '🏠' : isFailed ? '↻' : '▶'}
+            </Text>
             <Text style={styles.primaryText}>
-              {isFailed && roundResult.levelNumber > 0
-                ? `TRY AGAIN · LEVEL ${roundResult.levelNumber}`
-                : isFailed && isDailyRound
+              {isDailyRound
                 ? 'BACK TO HOME'
+                : isFailed && roundResult.levelNumber > 0
+                ? `TRY AGAIN · LEVEL ${roundResult.levelNumber}`
                 : !isFailed && roundResult.levelNumber > 0
                 ? `NEXT LEVEL ${Math.min(15, roundResult.levelNumber + 1)}`
                 : 'NEXT ROUND'}

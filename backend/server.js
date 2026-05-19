@@ -72,7 +72,17 @@ app.post('/api/generate-level', async (req, res) => {
     let difficulty;
     let chaalbaazActive = false;
 
-    if (levelNumber > 0) {
+    if (dailySeed) {
+      // Daily Challenge — ALWAYS 10×10 grid, 10 words, 100s. Static.
+      difficulty = {
+        difficulty: 'hard',
+        timeLimit: 100,
+        wordCount: 10,
+        gridSize: 10,
+        reason: 'Daily Challenge — 10×10 grid, 10 words, 100s.',
+        isDaily: true,
+      };
+    } else if (levelNumber > 0) {
       // Level Mode — use the locked level table; no adaptive logic.
       difficulty = difficultyAgent({}, { levelNumber });
     } else {

@@ -71,18 +71,15 @@ export default function DailyChallengeScreen({ navigation }) {
         return;
       }
 
-      // Not locked → load today's puzzle. Force 12×12 / 10 words / 100s.
+      // Not locked → load today's puzzle. Pass dailySeed at the ROOT so
+      // backend's daily branch fires and forces 10×10 / 10 words / 100s.
       const res = await generateLevel(
         {
           roundsPlayed: 0, avgWordsFound: 0, avgTimeLeft: 0,
           currentStreak: 0, lastCategory: '',
-          dailySeed: todayKey(),
         },
         {
-          forceDifficulty: 'hard',
-          forceGridSize: DAILY_GRID,
-          forceWordCount: DAILY_WORDS,
-          forceTimeLimit: DAILY_TIME,
+          dailySeed: todayKey(),
           language: settings.language,
         },
       );
