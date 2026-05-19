@@ -12,9 +12,9 @@ const VARIETY_TOPICS = [
 
 // Single lightweight model — cheapest path through free-tier quota. The
 // quiz only needs basic factual questions, not deep reasoning.
-// Single model. Adding more burns the project's per-minute token budget
-// without buying us much — they all share the same project quota.
-const QUIZ_MODELS = ['gemini-2.5-flash'];
+// Preview models have their own quota buckets — cascading lets us survive
+// when 2.x flash quotas are exhausted for the day.
+const QUIZ_MODELS = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 
 async function tryGemini({ apiKey, count, language, difficulty, modelName, excludeQuestions = [] }) {
   const langInstruction = language === 'urdu'
