@@ -65,7 +65,7 @@ Return STRICTLY valid JSON with these keys:
 ${langInstruction}`;
 
   try {
-    const text = await generate(prompt, {
+    const text = await generate(prompt, { agent: 'coachAgent',
       timeoutMs: 16000,
       temperature: 0.7,
       maxTokens: 600,

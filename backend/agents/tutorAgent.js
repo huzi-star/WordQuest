@@ -21,7 +21,7 @@ why it's culturally / historically significant. ${langInstruction}
 Output ONLY the sentence — no quotes, no labels.`;
 
   try {
-    const text = await generate(prompt, {
+    const text = await generate(prompt, { agent: 'tutorAgent',
       timeoutMs: 10000,
       temperature: 0.7,
       maxTokens: 100,

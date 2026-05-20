@@ -3,6 +3,7 @@
 // each agent.
 
 const OpenAI = require('openai');
+const logger = require('./logger');
 
 let cachedClient = null;
 function getClient() {
@@ -29,6 +30,7 @@ async function generate(prompt, opts = {}) {
     temperature = 0.8,
     maxTokens = 1200,
     responseFormat = 'text',
+    agent = 'unknown',     // for log tagging
   } = opts;
 
   const body = {
@@ -41,14 +43,46 @@ async function generate(prompt, opts = {}) {
     body.response_format = { type: 'json_object' };
   }
 
-  const completion = await Promise.race([
-    client.chat.completions.create(body),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('llm timeout')), timeoutMs)),
-  ]);
+  const startedAt = Date.now();
+  try {
+    const completion = await Promise.race([
+      client.chat.completions.create(body),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('llm timeout')), timeoutMs)),
+    ]);
 
-  const text = completion?.choices?.[0]?.message?.content || '';
-  if (!text) throw new Error('Empty response from OpenAI');
-  return text.trim();
+    const text = completion?.choices?.[0]?.message?.content || '';
+    const usage = completion?.usage || {};
+    if (!text) {
+      logger.push({
+        agent, model: body.model, status: 'error',
+        durationMs: Date.now() - startedAt,
+        error: 'Empty response',
+        prompt: prompt.slice(0, 600),
+      });
+      throw new Error('Empty response from OpenAI');
+    }
+
+    logger.push({
+      agent, model: body.model, status: 'ok',
+      durationMs: Date.now() - startedAt,
+      tokens: {
+        prompt: usage.prompt_tokens || 0,
+        completion: usage.completion_tokens || 0,
+        total: usage.total_tokens || 0,
+      },
+      prompt: prompt.slice(0, 600),
+      response: text.slice(0, 600),
+    });
+    return text.trim();
+  } catch (err) {
+    logger.push({
+      agent, model: body.model, status: 'error',
+      durationMs: Date.now() - startedAt,
+      error: err.message || String(err),
+      prompt: prompt.slice(0, 600),
+    });
+    throw err;
+  }
 }
 
 function isConfigured() {

@@ -63,7 +63,7 @@ Situation: ${triggerHint}
 Return ONE short line (max 15 words). ${langInstruction} No quotes, no labels.`;
 
   try {
-    const text = await generate(prompt, {
+    const text = await generate(prompt, { agent: 'commentatorAgent',
       timeoutMs: 7000,
       temperature: 0.9,
       maxTokens: 60,

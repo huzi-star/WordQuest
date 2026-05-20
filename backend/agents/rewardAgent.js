@@ -31,7 +31,7 @@ Return STRICTLY valid JSON only:
 }`;
 
   try {
-    const text = await generate(prompt, {
+    const text = await generate(prompt, { agent: 'rewardAgent',
       timeoutMs: 12000,
       temperature: 0.8,
       maxTokens: 220,

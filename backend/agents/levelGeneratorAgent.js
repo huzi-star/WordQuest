@@ -119,7 +119,7 @@ function emergencyPuzzle(wordCount, gridSize, lastCategory) {
 }
 
 async function tryGenerate({ prompt, gridSize }) {
-  const text = await generate(prompt, {
+  const text = await generate(prompt, { agent: 'levelGeneratorAgent',
     timeoutMs: 18000,
     temperature: 0.85,
     maxTokens: 700,

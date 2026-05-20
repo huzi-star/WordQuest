@@ -1,0 +1,53 @@
+b980583 2026-05-13 Initial commit: WordQuest Pakistan — AI-powered word puzzle game
+3b71222 2026-05-13 Wire mobile app to deployed Vercel backend + add root route
+72d2d62 2026-05-13 Update mobile BASE_URL to new Vercel deployment
+d828d1f 2026-05-16 Add app icon, splash, and adaptive icon (WordQuest logo)
+eba3ce0 2026-05-16 Add drag-to-select word puzzle gesture + rename app to WordQuest
+7491969 2026-05-16 Fix grid touch coordinates (1-row offset bug)
+3c282cd 2026-05-16 Add AI tutor + visual polish (score popup, confetti, haptics)
+70fdec1 2026-05-16 Quick-win polish: path line + reveal wave + combo + sound
+8d5bd21 2026-05-16 Add Live Commentary, Personal AI Coach, Chaalbaaz adversary agent
+e657208 2026-05-16 Trigger Vercel redeploy (Chaalbaaz/Coach/Commentary endpoints missing)
+5fdae0e 2026-05-16 Fix: upgrade Gemini model to 2.5-flash (1.5 deprecated)
+40f7f05 2026-05-16 Big update: dynamic grids, Hint button, Stats dashboard, redesigned popup
+6956379 2026-05-17 Premium UI redesign for Home + RoundComplete screens
+3c40ce5 2026-05-17 Instant validation + AI popup from top + premium Category and Stats redesigns
+2c6be70 2026-05-17 11-in-1 update: fonts, splash, settings, daily challenge, diagonals, gold, combo
+71800b0 2026-05-17 v1.7.0: AI-only content + 15 levels + Onboarding + Theme picker + Quiz mode
+d623eb2 2026-05-17 Fix 500 errors + dedicated LevelsScreen + English default language
+17304e9 2026-05-17 Supabase auth + cloud sync, commentary fallback, on-word commentary trigger
+ff242f6 2026-05-17 Wire live Supabase credentials (epjndqbazobrfhovhpza) — auth + sync live
+d162306 2026-05-17 Re-link Expo project under game-puzzle account (new free quota)
+9ea8543 2026-05-18 Auth-first launch flow: Auth -> Onboarding -> Home
+a54ca57 2026-05-18 Per-user data isolation, theme/language cloud sync, quiz fallback
+b61ea15 2026-05-18 Premium HomeScreen redesign — top bar avatar + icon buttons, hero, modes
+db2fb56 2026-05-18 v2.0.0: 9-point overhaul — auth logo, premium popup, instant commentary, easy diagonals, adaptive resume, quiz no-repeat, celebration emoji rain, badges card removed
+93fb3eb 2026-05-18 Quiz: 40-question bilingual pool + excludeQuestions tracking — no repeats
+49a4f95 2026-05-18 Premium theme-aware redesign — CategoryScreen + GameScreen
+062a3e2 2026-05-18 Diagonals at all difficulties + smart drag (anchor-to-current straight line)
+2b50d0f 2026-05-18 Wooden plank win/fail screen, themed emoji rain, GameScreen top padding
+d1fad42 2026-05-18 AI popup bottom + premium look, preserve adaptive state, hard time 75s
+365b912 2026-05-18 AI popup at top + Quiz 6s per question timer
+7ed8c5b 2026-05-18 Daily Challenge rework — elite 12x12 / 10w / 100s / 500pt-per-word + 12 h lockout
+3d64b6a 2026-05-18 Quiz Mode rework + global Roman Urdu cleanup
+a4cbe66 2026-05-18 Level Mode rework — locked 15-level table, retry reshuffles same words
+9f1f2de 2026-05-19 Fixes: resetStats preserves locks, flat Levels grid, Daily 10x10 + midnight lock, password eye toggle, per-user onboarding, visible Home settings icons
+d3304d0 2026-05-19 Fixes: Try Again on level fail, Daily defensive crash guard, premium Levels UI, theme overflow, Quiz preservation in reset, Game leave confirmation dialog
+d411720 2026-05-19 Fix Level 1/Daily 500: cap word length to grid size + add short-word seed pools
+492c9e6 2026-05-19 Fix Daily Challenge crash: remove undefined LOCK_HOURS reference
+9c33a1d 2026-05-19 Daily Challenge: force 10x10/10w/100s on backend, 500/word, no next round (single attempt to home)
+3b16307 2026-05-19 Quiz pure-AI (no hardcoded pool) + persist daily/quiz locks across logins via Supabase preferences
+cfde15b 2026-05-19 Level mode strict pass/fail (one missing word = fail) + disable swipe-back on Game screen
+9fb9f5a 2026-05-19 Quiz: 12s/attempt + maxOutputTokens to fit Vercel 30s budget; total score → high score
+7678d01 2026-05-19 Quiz: cascade Gemini 2.5-flash → 1.5-flash → 1.5-flash-8b on rate-limit
+fd2ffa5 2026-05-19 Quiz cascade: switch to available models (2.5-flash → 2.5-flash-lite → 2.0-flash → 2.0-flash-lite)
+45bb3df 2026-05-19 Bundle: Confirm modals + Change Password + per-level high score + Auth keyboard scroll + GameOver English-only theme cleanup
+c920f9f 2026-05-19 Quiz: lean prompt, smaller maxOutputTokens, auto-fallback to 10 questions on quota fail
+28d1426 2026-05-19 Quiz: switch to single lightweight model (gemini-2.0-flash-lite) for free-tier compatibility
+f99e764 2026-05-19 Quiz: prefer gemini-2.5-flash; flash-lite hit per-model quota
+25e3094 2026-05-19 Quiz: bump Vercel maxDuration to 60s, single model, longer per-attempt timeout
+82d9468 2026-05-19 Quiz: prefer gemini-3-flash-preview (fresh quota bucket)
+30747cb 2026-05-19 Quiz: bump mobile axios timeout to 75s (was 25s — silent client-side abort); trim backend cascade
+90bb15a 2026-05-19 Switch all agents from Gemini to OpenAI gpt-4o-mini via shared llm helper
+5f6b47e 2026-05-19 Quiz: premium animated loading screen (halo, step cycle, stat strip)
+bc5a75c 2026-05-19 README: comprehensive submission-ready docs (9 agents, modes, architecture)

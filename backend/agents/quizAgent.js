@@ -32,7 +32,7 @@ Each question: exactly 4 options, ONE correct (correctIndex 0-3), one-sentence e
 Return ONLY this JSON structure:
 {"topic":"…","topicEmoji":"…","questions":[{"question":"…","options":["a","b","c","d"],"correctIndex":0,"explanation":"…"}]}`;
 
-  const text = await generate(prompt, {
+  const text = await generate(prompt, { agent: 'quizAgent',
     timeoutMs: 22000,
     temperature: 0.9,
     maxTokens: 3500,

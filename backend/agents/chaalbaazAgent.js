@@ -59,7 +59,7 @@ PLAYER: ${message}${statContext}
 CHAALBAAZ:`;
 
   try {
-    const text = await generate(prompt, {
+    const text = await generate(prompt, { agent: 'chaalbaazAgent',
       timeoutMs: 14000,
       temperature: 0.95,
       maxTokens: 120,
