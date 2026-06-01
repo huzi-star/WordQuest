@@ -94,6 +94,17 @@ export function AuthProvider({ children }) {
       hasSeenOnboarding: !!(
         remote.preferences?.hasSeenOnboarding || localCurrent.hasSeenOnboarding
       ),
+      // Last tier celebrated — take whichever side has the HIGHER rank so
+      // the TierUp screen can't re-trigger by signing in/out or syncing
+      // from a stale cloud snapshot.
+      lastSeenTier: (() => {
+        // eslint-disable-next-line global-require
+        const { TIERS } = require('./tiers');
+        const rank = (k) => (TIERS.find((t) => t.key === k)?.rank || 1);
+        const r = remote.preferences?.lastSeenTier || 'bronze';
+        const l = localCurrent.lastSeenTier || 'bronze';
+        return rank(r) >= rank(l) ? r : l;
+      })(),
       // Level retry word cache — local-only.
       levelWordCache: localCurrent.levelWordCache || {},
       // Per-level high scores: merge remote with local, taking the max
@@ -119,7 +130,32 @@ export function AuthProvider({ children }) {
   async function syncUp() {
     if (!user) return;
     const local = await loadStats();
-    await upsertStats(user.id, local, settings);
+    // Surface a display name + stable avatar color to the leaderboard.
+    const displayName =
+      user.user_metadata?.display_name ||
+      user.user_metadata?.full_name ||
+      (user.email ? user.email.split('@')[0] : 'Player');
+    const palette = ['#7c3aed', '#22c55e', '#3b82f6', '#ec4899', '#f97316', '#06b6d4', '#facc15', '#a855f7'];
+    let h = 0; for (let i = 0; i < user.id.length; i++) h = (h * 31 + user.id.charCodeAt(i)) >>> 0;
+    // Player can override their auto-color via the Avatar screen.
+    const avatarColor = settings.avatarColor || palette[h % palette.length];
+    const avatarUrl = settings.avatarUrl || null;
+    const avatarEmoji = settings.avatarEmoji || null;
+    await upsertStats(user.id, local, { ...settings, displayName, avatarColor, avatarUrl, avatarEmoji });
+    // Also push to the public leaderboard table (different RLS — anon can read).
+    try {
+      const { leaderboardUpsert } = require('./api');
+      await leaderboardUpsert({
+        userId: user.id,
+        displayName,
+        avatarColor,
+        avatarUrl,
+        avatarEmoji,
+        totalScore: local.totalScoreEver || 0,
+        highScore: local.highScore || 0,
+        totalGames: local.totalGamesPlayed || 0,
+      });
+    } catch (_) {}
   }
 
   // After user IDENTITY changes (login / switch), pull cloud snapshot.
@@ -129,7 +165,13 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (user && user.id !== lastSyncedUserId.current) {
       lastSyncedUserId.current = user.id;
-      syncDown();
+      (async () => {
+        await syncDown();
+        // Guarantee the player has a user_stats row right after login so they
+        // show up in the Bronze leaderboard immediately (with displayName +
+        // avatarColor), even before they've changed any setting.
+        await syncUp();
+      })();
     } else if (!user) {
       lastSyncedUserId.current = null;
     }
@@ -138,7 +180,8 @@ export function AuthProvider({ children }) {
   // Whenever the user changes a setting, push to cloud (best-effort).
   useEffect(() => {
     if (user) syncUp();
-  }, [settings.theme, settings.language, settings.sound, settings.vibration]);
+  }, [settings.theme, settings.language, settings.sound, settings.vibration,
+      settings.avatarEmoji, settings.avatarColor, settings.avatarBorder, settings.avatarUrl]);
 
   return (
     <AuthContext.Provider value={{ user, ready, configured: supabaseConfigured, syncDown, syncUp }}>

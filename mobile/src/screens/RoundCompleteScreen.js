@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator, Animated,
+  ActivityIndicator, Animated, ImageBackground,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const BG = require('../../home_design/home_bg.jpeg');
 import { roundComplete } from '../utils/api';
-import { saveStats, logRound, completeLevel, markDailyAttempt, recordLevelScore } from '../utils/storage';
+import { saveStats, logRound, completeLevel, markDailyAttempt, recordLevelScore, loadStats } from '../utils/storage';
+import { tierUpDelta } from '../utils/tiers';
 import { useSettings } from '../utils/settings';
 import { useAuth } from '../utils/auth';
 import Confetti from '../components/Confetti';
@@ -19,6 +22,22 @@ export default function RoundCompleteScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [reward, setReward] = useState(null);
   const [showConfetti, setShowConfetti] = useState(true);
+  // Tier-up payload, set after logRound finishes computing the new
+  // totalScoreEver — checked when the player taps Continue.
+  const [pendingTierUp, setPendingTierUp] = useState(null);
+
+  // Wraps a destination so a pending tier-up celebration is shown FIRST.
+  function navigateWithTierUpCheck(destRoute, destParams) {
+    if (pendingTierUp) {
+      navigation.replace('TierUp', {
+        ...pendingTierUp,
+        returnTo: destRoute,
+        returnParams: destParams,
+      });
+    } else {
+      navigation.replace(destRoute, destParams);
+    }
+  }
 
   const fadeIn = useRef(new Animated.Value(0)).current;
   const heroScale = useRef(new Animated.Value(0.7)).current;
@@ -60,8 +79,10 @@ export default function RoundCompleteScreen({ navigation, route }) {
         wordsFound: roundResult.wordsFound,
         totalWords: roundResult.totalWords,
         timeSpent: roundResult.timeSpent || 0,
-        // Failed daily challenge contributes 0 to lifetime totals.
-        roundScore: isDailyFail ? 0 : (roundResult.roundScore || 0),
+        // Daily Challenge credits 5 pts/word IMMEDIATELY during the round
+        // (see GameScreen), so we must NOT add roundScore again here or
+        // totalScoreEver would double-count. Failed daily = 0 regardless.
+        roundScore: roundResult.isDaily ? 0 : (roundResult.roundScore || 0),
         perfect: roundResult.wordsFound === roundResult.totalWords,
         hintsUsed: roundResult.hintsUsed || 0,
       });
@@ -75,6 +96,13 @@ export default function RoundCompleteScreen({ navigation, route }) {
       if (roundResult.isDaily) {
         await markDailyAttempt();
       }
+      // Detect tier-up: logRound has just updated totalScoreEver, so read
+      // the fresh value and compare against lastSeenTier.
+      try {
+        const fresh = await loadStats();
+        const delta = tierUpDelta(fresh.lastSeenTier || 'bronze', fresh.totalScoreEver || 0);
+        if (delta) setPendingTierUp(delta);
+      } catch (_) {}
       // Push the latest local stats up to Supabase (no-op if not logged in).
       syncUp().catch(() => {});
       setLoading(false);
@@ -105,7 +133,8 @@ export default function RoundCompleteScreen({ navigation, route }) {
   const failEmojis = ['😢', '💔', '😭', '☹️', '🥺', '😞', '⛈', '🌧'];
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg }]}>
+    <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+      <View style={styles.tealTint} />
       <View style={[styles.blob, { backgroundColor: accent, top: -100, right: -80 }]} />
       <Confetti
         visible={showConfetti}
@@ -235,7 +264,7 @@ export default function RoundCompleteScreen({ navigation, route }) {
             onPress={async () => {
               // DAILY CHALLENGE (win OR lose) → single-round mode, head home.
               if (isDailyRound) {
-                navigation.replace('Home');
+                navigateWithTierUpCheck('Home');
                 return;
               }
               // FAILED LEVEL → retry the SAME level (same words, new grid).
@@ -243,7 +272,7 @@ export default function RoundCompleteScreen({ navigation, route }) {
                 // eslint-disable-next-line global-require
                 const { getLevelWords } = require('../utils/storage');
                 const cached = await getLevelWords(roundResult.levelNumber);
-                navigation.replace('Category', {
+                navigateWithTierUpCheck('Category', {
                   playerStats,
                   sessionStats: { ...sessionStats, score: 0, streak: 0, history: [] },
                   levelNumber: roundResult.levelNumber,
@@ -256,7 +285,7 @@ export default function RoundCompleteScreen({ navigation, route }) {
               }
               // PASSED LEVEL → advance to next level number.
               if (!isFailed && roundResult.levelNumber > 0) {
-                navigation.replace('Category', {
+                navigateWithTierUpCheck('Category', {
                   playerStats,
                   sessionStats,
                   levelNumber: Math.min(15, roundResult.levelNumber + 1),
@@ -264,7 +293,9 @@ export default function RoundCompleteScreen({ navigation, route }) {
                 return;
               }
               // Quick Play / daily / etc → unchanged adaptive flow.
-              navigation.replace('Category', { playerStats, sessionStats });
+              // The next Category screen will read the (now updated) tier
+              // and pick the new tier's difficulty automatically.
+              navigateWithTierUpCheck('Category', { playerStats, sessionStats });
             }}
           >
             <Text style={styles.primaryArrow}>
@@ -284,7 +315,7 @@ export default function RoundCompleteScreen({ navigation, route }) {
           <View style={styles.secondaryRow}>
             <TouchableOpacity
               style={styles.secondaryBtn}
-              onPress={() => navigation.replace('Home')}
+              onPress={() => navigateWithTierUpCheck('Home')}
             >
               <Text style={styles.secondaryText}>🏠 Home</Text>
             </TouchableOpacity>
@@ -299,12 +330,13 @@ export default function RoundCompleteScreen({ navigation, route }) {
           <View style={{ height: 30 }} />
         </ScrollView>
       </SafeAreaView>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#070b14', overflow: 'hidden' },
+  container: { flex: 1, overflow: 'hidden' },
+  tealTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(13,80,80,0.55)' },
   blob: { position: 'absolute', width: 280, height: 280, borderRadius: 140, opacity: 0.15 },
   scroll: { padding: 18, gap: 12 },
 
@@ -324,7 +356,8 @@ const styles = StyleSheet.create({
   plank: {
     width: '94%', alignSelf: 'center',
     paddingTop: 22, paddingBottom: 56, paddingHorizontal: 18,
-    borderRadius: 18, borderWidth: 3,
+    borderRadius: 20, borderWidth: 3,
+    borderBottomWidth: 9, borderBottomColor: '#451a03',
     alignItems: 'center', justifyContent: 'center',
     shadowOpacity: 0.5, shadowRadius: 22, shadowOffset: { width: 0, height: 8 }, elevation: 12,
     position: 'relative',
@@ -334,36 +367,51 @@ const styles = StyleSheet.create({
   star: { fontSize: 36, color: '#fcd34d' },
   starBig: { fontSize: 52, marginBottom: 4, color: '#fcd34d' },
   bannerBar: {
-    position: 'absolute', bottom: -2, left: 24, right: 24,
-    paddingVertical: 10, borderRadius: 12, borderWidth: 2,
+    position: 'absolute', bottom: -8, left: 24, right: 24,
+    paddingVertical: 10, borderRadius: 14, borderWidth: 3,
+    borderBottomWidth: 6, borderBottomColor: 'rgba(0,0,0,0.45)',
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
   },
-  bannerText: { fontSize: 16, fontWeight: '900', letterSpacing: 2 },
+  bannerText: {
+    fontSize: 16, fontWeight: '900', letterSpacing: 2,
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2,
+  },
   ropeL: { color: '#fff', fontSize: 16, fontWeight: '900' },
   ropeR: { color: '#fff', fontSize: 16, fontWeight: '900' },
-  heroSub: { color: '#94a3b8', marginTop: 4 },
-  heroScore: { fontSize: 54, fontWeight: '900', marginTop: 12 },
-  heroScoreLabel: { color: '#64748b', fontSize: 11, letterSpacing: 1.5, fontWeight: '700' },
+  heroSub: {
+    color: '#fef3c7', marginTop: 4, fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2,
+  },
+  heroScore: {
+    fontSize: 54, fontWeight: '900', marginTop: 12,
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 3 }, textShadowRadius: 4,
+  },
+  heroScoreLabel: { color: '#fde68a', fontSize: 11, letterSpacing: 1.5, fontWeight: '900' },
 
-  statsRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  statsRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
   statTile: {
     flex: 1,
-    backgroundColor: '#0e1726',
+    backgroundColor: 'rgba(15,23,42,0.85)',
     borderRadius: 16,
     padding: 14,
     alignItems: 'center',
-    borderWidth: 1, borderColor: '#1f2937',
+    borderWidth: 3, borderColor: '#fff',
+    borderBottomWidth: 7, borderBottomColor: '#0f172a',
   },
   statEmoji: { fontSize: 22 },
-  statValue: { color: '#fff', fontSize: 20, fontWeight: '900', marginTop: 4 },
-  statLabel: { color: '#64748b', fontSize: 9, fontWeight: '700', letterSpacing: 1, marginTop: 2 },
+  statValue: {
+    color: '#fff', fontSize: 20, fontWeight: '900', marginTop: 4,
+    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2,
+  },
+  statLabel: { color: '#fde68a', fontSize: 9, fontWeight: '900', letterSpacing: 1, marginTop: 2 },
 
   card: {
-    backgroundColor: '#0e1726',
-    borderRadius: 16,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderRadius: 18,
     padding: 14,
-    borderWidth: 1, borderColor: '#1f2937',
+    borderWidth: 3, borderColor: '#fff',
+    borderBottomWidth: 7, borderBottomColor: '#0f172a',
   },
   badgeCard: { borderColor: '#fcd34d' },
   sectionTitle: { color: '#fcd34d', fontWeight: '900', fontSize: 12, letterSpacing: 1.5 },
@@ -375,33 +423,45 @@ const styles = StyleSheet.create({
   badgeName: { color: '#fff', fontWeight: '800', fontSize: 15 },
   badgeMsg: { color: '#cbd5e1', marginTop: 2, fontSize: 13 },
 
-  encourageCard: { borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.06)' },
-  encourageText: { color: '#86efac', fontSize: 14, textAlign: 'center', fontWeight: '600', fontStyle: 'italic' },
+  encourageCard: { borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.18)' },
+  encourageText: { color: '#dcfce7', fontSize: 14, textAlign: 'center', fontWeight: '700', fontStyle: 'italic' },
 
   aiCard: { borderColor: '#a78bfa' },
   aiHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   aiAvatar: { fontSize: 18 },
-  aiLabel: { color: '#a78bfa', fontWeight: '900', fontSize: 11, letterSpacing: 1.2 },
-  aiText: { color: '#e9d5ff', fontSize: 14, lineHeight: 20 },
+  aiLabel: { color: '#c4b5fd', fontWeight: '900', fontSize: 11, letterSpacing: 1.2 },
+  aiText: { color: '#ede9fe', fontSize: 14, lineHeight: 20, fontWeight: '600' },
 
-  loadingText: { color: '#94a3b8', marginTop: 10 },
+  loadingText: { color: '#fde68a', marginTop: 10, fontWeight: '700' },
 
   primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: '#22c55e', borderRadius: 22, paddingVertical: 18,
+    backgroundColor: '#22c55e', borderRadius: 999, paddingVertical: 18,
+    borderWidth: 3, borderColor: '#fff',
+    borderBottomWidth: 9, borderBottomColor: '#14532d',
     shadowOpacity: 0.55, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 14,
   },
-  primaryArrow: { color: '#0f172a', fontSize: 18 },
-  primaryText: { color: '#0f172a', fontSize: 17, fontWeight: '900', letterSpacing: 2 },
+  primaryArrow: {
+    color: '#fff', fontSize: 20, fontWeight: '900',
+    textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2,
+  },
+  primaryText: {
+    color: '#fff', fontSize: 17, fontWeight: '900', letterSpacing: 2,
+    textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2,
+  },
 
-  secondaryRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  secondaryRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
   secondaryBtn: {
     flex: 1,
-    backgroundColor: 'rgba(148, 163, 184, 0.08)',
+    backgroundColor: 'rgba(15,23,42,0.85)',
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: 'center',
-    borderWidth: 1, borderColor: '#1f2937',
+    borderWidth: 3, borderColor: '#fff',
+    borderBottomWidth: 7, borderBottomColor: '#0f172a',
   },
-  secondaryText: { color: '#cbd5e1', fontWeight: '700' },
+  secondaryText: {
+    color: '#fff', fontWeight: '900', letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2,
+  },
 });

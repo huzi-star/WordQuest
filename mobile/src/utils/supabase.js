@@ -113,9 +113,16 @@ export async function upsertStats(userId, stats, prefs = {}) {
       dailyChallengeLastAttemptAt: Number(stats.dailyChallengeLastAttemptAt) || 0,
       quizLastAttemptAt: Number(stats.quizLastAttemptAt) || 0,
       hasSeenOnboarding: !!stats.hasSeenOnboarding,
+      dob: prefs.dob || null,
+      displayName: prefs.displayName || null,
+      avatarColor: prefs.avatarColor || null,
       // Per-level high scores — synced so the player keeps their bests
       // across devices and logins.
       levelHighScores: stats.levelHighScores || {},
+      // Last tier the player has been celebrated for — must persist across
+      // devices, or the TierUp screen would re-trigger every time stats
+      // sync down from Supabase.
+      lastSeenTier: stats.lastSeenTier || 'bronze',
     },
     updated_at: new Date().toISOString(),
   };
@@ -150,4 +157,53 @@ export async function deleteUserStats(userId) {
   if (!supabase || !userId) return;
   const { error } = await supabase.from('user_stats').delete().eq('user_id', userId);
   if (error) console.warn('deleteUserStats error:', error.message);
+}
+
+// Pro Max avatar upload — uploads a photo to the `avatars` bucket and
+// returns the public URL.
+//
+// Uses fetch(uri).arrayBuffer() so we don't depend on expo-file-system
+// (whose readAsStringAsync was deprecated in SDK 54). ArrayBuffer is the
+// payload type @supabase/storage-js v2 accepts directly in React Native —
+// blob() on Android can come back zero-byte, while arrayBuffer carries the
+// real image bytes from local file:// URIs.
+export async function uploadAvatarPhoto(userId, fileUri) {
+  if (!supabase) return { ok: false, error: 'Supabase client not configured.' };
+  if (!userId)   return { ok: false, error: 'You must be logged in to upload a photo.' };
+  if (!fileUri)  return { ok: false, error: 'No image selected.' };
+  try {
+    const ext = (fileUri.split('.').pop() || 'jpg').toLowerCase().split('?')[0];
+    const contentType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    // Stable filename per user — `upsert: true` overwrites the previous one,
+    // so the player only ever has one avatar file in the bucket.
+    const path = `${userId}/avatar.${ext}`;
+
+    const res = await fetch(fileUri);
+    if (!res.ok) return { ok: false, error: `Could not read selected file (${res.status}).` };
+
+    // Prefer arrayBuffer (RN-safe). Fall back to blob if arrayBuffer is
+    // unavailable on older runtimes.
+    let body;
+    if (typeof res.arrayBuffer === 'function') {
+      body = await res.arrayBuffer();
+    } else {
+      body = await res.blob();
+    }
+
+    const { error } = await supabase.storage.from('avatars').upload(path, body, {
+      contentType, upsert: true,
+    });
+    if (error) {
+      console.warn('avatar upload error:', error.message);
+      return { ok: false, error: error.message || 'Storage upload failed.' };
+    }
+    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+    if (!pub?.publicUrl) return { ok: false, error: 'Uploaded but could not get public URL.' };
+    // Cache-bust the URL so the new photo replaces the cached old one
+    // immediately in the preview / home / leaderboard.
+    return { ok: true, publicUrl: `${pub.publicUrl}?v=${Date.now()}` };
+  } catch (err) {
+    console.warn('avatar upload exception:', err?.message);
+    return { ok: false, error: err?.message || 'Unknown upload error.' };
+  }
 }

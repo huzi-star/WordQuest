@@ -1,255 +1,266 @@
 # WordQuest 🎮
 
-**AI-powered word puzzle game for Android.**
-Built for **Google Antigravity Hackathon #AISeekho2026 — Challenge 4: Agentic Game Quest.**
+**AI-powered word-puzzle game for Android — built for kids (13 and under).**
 
-Every puzzle, quiz, encouragement line and coaching analysis is generated on
-demand by AI. Difficulty adapts to the player. Stats sync across devices via
-Supabase. The result is a fully-playable production-grade mobile app that
-showcases real agentic behaviour from start to finish.
+Players climb a 7-tier ladder (Bronze → Master), follow a 32-unit CEFR learning
+path (A1 → B1), battle real opponents 1v1, and chat with a personal AI tutor.
+Every puzzle, quiz question, lesson, encouragement line and coaching note is
+generated on demand by AI. Stats sync across devices via Supabase, three
+subscription tiers gate premium features, and the whole UI is built in a
+polished cartoonish 3D style.
 
 ---
 
-## ✨ Submission quick-links
+## ✨ Quick links
 
 | What | Link |
 |---|---|
-| 📱 Mobile App (APK) | https://expo.dev/artifacts/eas/w3vQCSrhE5iBBm8hacExkH.apk |
-| 💻 GitHub | https://github.com/huzi-star/puzzle |
+| 📱 Latest APK (v3.8.0) | https://expo.dev/artifacts/eas/85gHn8ZeWBrEGhCBQjxk72.apk |
+| 💻 GitHub | https://github.com/huzi-star/WordQuest |
 | 🌐 Backend (live) | https://backend-liart-three-60.vercel.app |
 | 🗄 Supabase project | https://supabase.com/dashboard/project/epjndqbazobrfhovhpza |
 
 ---
 
-## 🤖 Why this fits "Agentic Game Quest"
+## 🎮 Game modes
 
-The game is not one prompt — it's **nine cooperating agents**, each with a
-narrow responsibility, orchestrated by an Express backend. Players literally
-**see the agents thinking** — the difficulty agent's reasoning is surfaced on
-the category screen, the referee's verdicts pop up live during play, the
-coach analyses your performance after the session, and the adversary
-"Chaalbaaz" can talk trash if you call him out.
+| Mode | What it is | Scoring |
+|---|---|---|
+| **Quick Play** | Adaptive AI puzzle — grid + word count + time scale with the player's tier | Tier-based points/word (Bronze 1 pt → Master 2 pts) |
+| **Daily Challenge** | One global puzzle every 24h, same words for everyone | **5 pts/word**, credited per-word, locks until next midnight |
+| **Quiz Mode** | 20 multi-choice trivia questions, fresh AI MCQs every session | **2 pts/correct**, credited per-question |
+| **1v1 Battle** | Real-time MMR-ranked match against a player in your tier | Elo (K=32) win/loss, leaderboard ranking |
+| **Learning Path** | 32 CEFR-graded units (A1 → A2 → A2+ → B1), 4 lessons per unit | XP-based, unlocks tier progression bonuses |
+| **Level Mode** | 15 fixed-config levels (3×3 → 12×12), unlock chain | Per-level personal bests |
 
-### The 9 agents
+---
+
+## 🏆 Tier ladder
+
+7 tiers gated by lifetime `totalScoreEver`:
+
+| Tier | Threshold | Grid | Words | Time | Pts/word |
+|---|---|---|---|---|---|
+| 🥉 Bronze    | 0     | 6×6  | 4 | 90s | 1 |
+| 🥈 Silver    | 300   | 7×7  | 5 | 80s | 1 |
+| 🏅 Gold      | 600   | 8×8  | 6 | 70s | 1 |
+| 💠 Platinum  | 900   | 9×9  | 7 | 60s | 2 |
+| 💎 Diamond   | 1,500 | 10×10 | 8 | 50s | 2 |
+| 👑 Elite     | 2,100 | 11×11 | 9 | 45s | 2 |
+| 🔥 Master    | 2,500 | 12×12 | 10 | 40s | 2 |
+
+When a player crosses a threshold, a full-screen **Tier Up celebration** plays
+— corner confetti bursts, badge spring-bounce, glow halo, staggered trophies,
+"Let's Go!" bouncing CTA — and Supabase is updated immediately so the
+celebration never fires twice across devices.
+
+---
+
+## 💎 Subscription plans
+
+| Plan | Price (₨) | Limits | Unlocks |
+|---|---|---|---|
+| **Free** | 0 | 5 Quick Play / day, 1 Daily, 1 Quiz | A1 stage, Bronze + Silver tiers, ads |
+| **Pro** ⭐ | 299/mo · 1999/yr | Unlimited | All tiers, 1v1 Battle, A1+A2 (24 units), no ads, 5 hints, voice pronunciation (5 languages) |
+| **Pro Max** 👑 | 599/mo · 3999/yr | Unlimited | Everything in Pro + full A1→B1 (32 units), Parent Dashboard, AI Tutor 1-on-1 chat, custom avatars, offline mode |
+
+Coupons: `HUZIQUEST` → 7-day Pro · `HUZIBUILD` → 7-day Pro Max.
+
+7-day free Pro trial available on first sign-up.
+
+---
+
+## 🤖 Backend AI agents
+
+The backend is an Express server orchestrating **nine specialised agents**
+behind a small REST surface (deployed on Vercel).
 
 | Agent | Engine | Role |
 |---|---|---|
-| 🎚 **difficultyAgent** | Pure logic | Reads rolling player stats, picks easy/medium/hard + grid + time. Returns a human-readable reason. |
-| 🎨 **levelGeneratorAgent** | **gpt-4o-mini** | Picks a category, generates words for that gridSize, builds an 8-direction word-search grid (H/V/diagonals), writes a fun fact. |
-| ⚖ **refereeAgent** | Pure logic | Validates each word, computes base + time bonus + combo multiplier (1.5x → 3x). Single source of truth for scoring. |
-| 🏅 **rewardAgent** | **gpt-4o-mini** | Evaluates 5 badge conditions, generates encouragement + a forward-looking "next round" preview. |
-| 🎓 **tutorAgent** | **gpt-4o-mini** | When a word is found, writes a 1-sentence cultural/educational note in the player's language. |
-| 🎙 **commentatorAgent** | **gpt-4o-mini** | Live in-round commentary on milestones (half-time, low-time, streak, idle). Falls back to templates. |
-| 🧠 **coachAgent** | **gpt-4o-mini** | End-of-session full analysis: strengths, areas to improve, headline summary. |
-| 😏 **chaalbaazAgent** | **gpt-4o-mini** + logic | Adversary persona. Two modes: silently escalates difficulty when player is dominating ("tune"), and chats trash-talk on demand. |
-| ❓ **quizAgent** | **gpt-4o-mini** | Generates 20 multi-choice trivia questions per session, varied topics, anti-repeat (recent question texts excluded from prompt). |
+| 🎚 **difficultyAgent** | Pure logic | Reads rolling player stats, picks easy/medium/hard + grid + time. Surfaces a human-readable reason. |
+| 🎨 **levelGeneratorAgent** | gpt-4o-mini | Picks a category, generates words for that grid size, builds an 8-direction word-search grid (horizontal / vertical / 4 diagonals), writes a fun fact. |
+| ⚖ **refereeAgent** | Pure logic | Validates each word, computes base + bonuses. Single source of truth for scoring. |
+| 🏅 **rewardAgent** | gpt-4o-mini | Evaluates badge conditions, generates encouragement + a forward-looking next-round preview. |
+| 🎓 **tutorAgent** | gpt-4o-mini | After a found word, writes a one-sentence cultural / educational note. |
+| 🎙 **commentatorAgent** | gpt-4o-mini | Live in-round commentary on milestones (half-time, low-time, streak, idle). Falls back to templates. |
+| 🧠 **coachAgent** | gpt-4o-mini | End-of-session analysis: strengths, areas to improve, headline summary. |
+| 😏 **chaalbaazAgent** | gpt-4o-mini + logic | Adversary persona — silently escalates difficulty when player is dominating, plus on-demand trash talk. |
+| ❓ **quizAgent** | gpt-4o-mini | Generates 20 multi-choice questions per session, varied topics, anti-repeat (recent question texts excluded from prompt). |
+
+Additional services:
+
+- **lessonAgent** — generates 4 lesson types (vocabulary / grammar / scramble / quiz) per learning unit; cached per `unit_id × lesson_index × lesson_type`
+- **wordOfDayAgent** — one global "Word of the Day" per tier, same word for every player
+- **wordDetailAgent** — kid-safe word card (meaning, sentence, example) on tap
+- **translateAgent** — translates the meaning into 5 languages on demand
+- **tutorChat (`/api/tutor/chat`)** — Pro Max 1-on-1 AI tutor chat with kid-safe system prompt
+- **parentApi (`/api/parent/summary`)** — weekly progress chart for the Parent Dashboard
 
 ---
 
-## 🎮 Game modes
+## 🎓 Learning Academy (CEFR)
 
-| Mode | Spec | Notes |
+32 units across 4 CEFR stages:
+
+| Stage | Units | Focus |
 |---|---|---|
-| **Quick Play** | Adaptive — AI picks easy/medium/hard each round | Endless loop, difficulty bands react to your performance |
-| **Level Mode** | 15 fixed-config levels (3×3 → 12×12) | Unlock progression, per-level high scores tracked, **retry reshuffles same words** into a new grid via AI |
-| **Daily Challenge** | 10×10 / 10 words / 100s / 500 pts per word | One attempt per day, locks until next midnight, fresh AI-picked category daily |
-| **Quiz Mode** | 20 questions / 200 pts each / 7s per question | gpt-4o-mini writes fresh MCQs every session, anti-repeat list |
+| **A1 Foundations** | 1–8 | Greetings, numbers, family, basic verbs |
+| **A2 Building Blocks** | 9–16 | Daily routines, food, weather, hobbies |
+| **A2+ Vocabulary** | 17–24 | Travel, work, feelings, descriptions |
+| **B1 Intermediate** | 25–32 | Opinions, future plans, abstract topics |
+
+Each unit has 4 lessons (vocabulary, grammar, scramble, quiz) cached in
+Supabase so the same lesson is identical across devices.
 
 ---
 
-## 🏗 Architecture
+## 🛠 Architecture
 
 ```
-   ┌──────────────────────────┐         ┌────────────────────────────┐
-   │  Expo / React Native app │         │  Express on Vercel         │
-   │  (SDK 54, Poppins fonts) │ ◄─────► │  /api/* endpoints          │
-   │                          │  axios  │                            │
-   │  Screens: Home, Category │         │  ┌───────────────────────┐ │
-   │  Game, RoundComplete,    │         │  │ 9 agents orchestrate  │ │
-   │  GameOver, Levels,       │         │  │ each /api/* call      │ │
-   │  Daily, Quiz, Stats,     │         │  │ (logic + OpenAI)      │ │
-   │  Settings, Auth, etc.    │         │  └───────────────────────┘ │
-   └──────┬───────────────────┘         └──────────┬─────────────────┘
-          │                                        │
-          ▼                                        ▼
-   ┌────────────────────┐               ┌────────────────────────┐
-   │ AsyncStorage       │               │ OpenAI gpt-4o-mini     │
-   │ (per-user scoped)  │               │ (single LLM helper)    │
-   └──────┬─────────────┘               └────────────────────────┘
-          │
-          ▼
-   ┌──────────────────────────┐
-   │ Supabase (auth + sync)   │
-   │ Postgres `user_stats`    │
-   │ + auth.users             │
-   └──────────────────────────┘
+┌──────────────────┐      HTTPS      ┌──────────────────┐
+│  Expo / RN app   │ ◀──────────────▶│  Express backend │
+│  (Android APK)   │                 │  (Vercel)        │
+└────────┬─────────┘                 └────────┬─────────┘
+         │                                    │
+         │ Auth + Stats sync                  │ Reads / writes
+         ▼                                    ▼
+   ┌─────────────────────────────────────────────┐
+   │  Supabase                                   │
+   │  ├ auth.users                               │
+   │  ├ user_stats  (per-user lifetime stats)    │
+   │  ├ wq_user_leaderboard  (tier ranking)      │
+   │  ├ wq_subscriptions  (plan + trial state)   │
+   │  ├ wq_daily_usage    (per-day usage caps)   │
+   │  ├ wq_learn_progress / wq_learn_attempts    │
+   │  ├ wq_learn_lesson_cache                    │
+   │  └ Storage bucket: avatars                  │
+   └─────────────────────────────────────────────┘
 ```
 
-### Orchestration example: starting a level
-
-```
-HomeScreen → tap "Levels" → LevelsScreen → tap level 5
-        ▼
-[POST /api/generate-level { levelNumber: 5, ... }]
-        │
-        ├─→ difficultyAgent({}, { levelNumber: 5 })
-        │     returns { gridSize: 6, wordCount: 6, timeLimit: 60 }
-        │
-        └─→ levelGeneratorAgent({ gridSize, wordCount, language, levelNumber })
-              │ if retry: pass cached words → just reshuffles grid layout
-              │ else: ask gpt-4o-mini for category + words + funFact
-              ▼
-              { category, categoryEmoji, words, grid, wordPositions, funFact }
-        ▼
-CategoryScreen → shows AI reasoning + fun fact
-        ▼
-GameScreen → player taps/drags letters
-        ▼ on each completed word
-[Client-side refereeAgent equivalent for instant validation]
-        ▼ when timer hits 0 OR all words found
-[POST /api/round-complete { wordsFound, totalWords, timeLeft, ... }]
-        │
-        └─→ rewardAgent → { badges, streakUpdated, encouragement, nextRoundPreview }
-        ▼
-RoundCompleteScreen → wooden plank with stars
-        - All found      → 3 stars, "LEVEL COMPLETED"
-        - Any miss       → 0 stars, "FAILED", "Try Again" with reshuffled words
-        ▼
-Pass: unlock next level + record per-level high score (synced to Supabase)
-```
+- **Mobile** — Expo SDK 54, React Native 0.81, React Navigation 7, expo-av
+  (BGM + SFX), expo-image-picker, expo-speech.
+- **Backend** — Node.js + Express, deployed on Vercel. Stateless; all
+  persistence is Supabase.
+- **AI** — OpenAI `gpt-4o-mini` via `utils/llm.js`.
+- **Auth + Storage** — Supabase Postgres with RLS, anon-read policies for
+  public leaderboard, `avatars` storage bucket for photo uploads.
+- **1v1 Battle MMR** — Elo rating with K = 32, queue matches players within
+  the same tier band.
 
 ---
 
-## 🔑 Tech stack
-
-- **Mobile**: Expo SDK 54, React Native 0.81, React Navigation 7, Animated API, AsyncStorage, Axios, Poppins Google Font
-- **Backend**: Node.js + Express, OpenAI SDK, dotenv, CORS — deployed on Vercel (`maxDuration: 60`)
-- **AI**: **OpenAI gpt-4o-mini** for all generative agents (chat completions + JSON mode)
-- **Auth + Cloud Sync**: Supabase (auth + Postgres + RLS)
-- **CI / Build**: GitHub → EAS Build (Expo cloud) → APK
-
----
-
-## 📁 Folder structure
+## 📁 Repository layout
 
 ```
 wordquest/
-├── backend/
-│   ├── server.js                       # Express orchestrator
-│   ├── vercel.json                     # 60s function timeout
-│   ├── utils/
-│   │   └── llm.js                      # single OpenAI helper
-│   └── agents/
-│       ├── difficultyAgent.js          # pure logic
-│       ├── levelGeneratorAgent.js      # gpt-4o-mini
-│       ├── refereeAgent.js             # pure logic
-│       ├── rewardAgent.js              # gpt-4o-mini
-│       ├── tutorAgent.js               # gpt-4o-mini
-│       ├── commentatorAgent.js         # gpt-4o-mini
-│       ├── coachAgent.js               # gpt-4o-mini
-│       ├── chaalbaazAgent.js           # gpt-4o-mini + logic
-│       └── quizAgent.js                # gpt-4o-mini
-└── mobile/
-    ├── App.js                          # Stack navigator
-    ├── app.json                        # Expo config, icon, splash
-    ├── eas.json                        # build profiles
-    └── src/
-        ├── screens/
-        │   ├── OnboardingScreen.js
-        │   ├── AuthScreen.js
-        │   ├── ChangePasswordScreen.js
-        │   ├── HomeScreen.js
-        │   ├── LevelsScreen.js
-        │   ├── DailyChallengeScreen.js
-        │   ├── QuizScreen.js
-        │   ├── CategoryScreen.js
-        │   ├── GameScreen.js
-        │   ├── RoundCompleteScreen.js
-        │   ├── GameOverScreen.js
-        │   ├── StatsScreen.js
-        │   └── SettingsScreen.js
-        ├── components/
-        │   ├── WordGrid.js             # drag + tap + diagonal lines
-        │   ├── WordList.js
-        │   ├── Timer.js
-        │   ├── AgentThinking.js        # AI bubble at top of game
-        │   ├── ScorePopup.js
-        │   ├── Confetti.js             # emoji rain
-        │   ├── ConfirmModal.js         # premium reusable dialog
-        │   ├── AnimatedNumber.js
-        │   └── AnimatedSplash.js
-        └── utils/
-            ├── api.js                   # axios + slow client (75s)
-            ├── auth.js                  # AuthProvider + syncDown/Up
-            ├── supabase.js              # client + signUp/signIn/changePassword
-            ├── storage.js               # per-user scoped AsyncStorage
-            ├── settings.js              # SettingsProvider + i18n + themes
-            ├── theme.js                 # 4 color palettes
-            └── sound.js                 # ding sound effect
+├── mobile/                  Expo / React Native app
+│   ├── App.js               Stack navigator + provider tree
+│   ├── app.json             Expo config (versionCode lives here)
+│   ├── home_design/         Visual assets (backgrounds, png icons)
+│   ├── assets/sounds/       BGM + SFX (incl. synthesized win + word-found)
+│   ├── app-logo.jpeg
+│   ├── splash.jpeg
+│   └── src/
+│       ├── screens/         Every game screen (Home, Game, Battle, etc.)
+│       ├── components/      Confetti, ConfirmModal, AnimatedSplash, etc.
+│       └── utils/           api, supabase, settings, plan, tiers, sound, storage, theme, auth
+├── backend/                 Node.js + Express
+│   ├── server.js
+│   ├── routes/              quickplayApi, tierApi, battleApi, learnApi, quizApi, subscriptionApi, parentApi, tutorApi
+│   ├── agents/              9 AI agents above + lessonAgent etc.
+│   ├── config/              tiers ladder, curriculum (32 units)
+│   └── WQ_ALL_PATCH.sql     One-shot SQL — tables + RLS + avatars bucket
+└── README.md
 ```
 
 ---
 
-## 💎 Premium features
-
-- 🌐 **Bilingual UI** — English (default) or Roman Urdu, toggle in Settings
-- 🎨 **4 themes** — Green, Gold, Purple, Neon Cyan
-- 🔐 **Real auth** — Supabase email/password, change-password screen with eye-toggle on all fields
-- 📊 **Stats dashboard** — XP/level, totals, recent scores, category mastery, activity heatmap
-- 🏆 **Per-level high scores** — shown on each level tile
-- 🌟 **Daily Challenge** — single attempt, locks until midnight with live countdown
-- ⚡ **Combo multiplier** — back-to-back words give 1.5x → 2x → 3x
-- 💡 **Hint power-up** — 3 hints per round, reveals one letter, 30-point cost
-- 🎙 **Premium animated UI** — onboarding flow, splash with logo zoom, animated quiz loading, premium ConfirmModal for Reset Stats and Quit Game, custom level-completed wooden plank with 3 stars
-- 📳 **Sound + Vibration** — toggleable, per-action haptics
-- 🎉 **Win celebration** — Pakistani flag + sparkle emoji rain on perfect rounds
-- 💔 **Loss screen** — crying emoji rain on level fail with "Try Again" that reshuffles same words
-- 🤖 **Live AI commentary** — half-time, low-time, streak, idle bubbles from the top
-- 🛡 **Swipe-back disabled in-game** — only Quit + premium confirm modal can exit
-- 🔄 **Cloud sync** — Daily/Quiz lock, onboarding flag, per-level scores all survive logout/login
-
----
-
-## 🚀 Running locally
+## 🚀 Run locally
 
 ### Backend
 
 ```bash
 cd backend
 npm install
-# create .env with OPENAI_API_KEY=sk-...
-npm start
+cp .env.example .env       # set OPENAI_API_KEY + SUPABASE_URL/KEY
+npm run dev                # localhost:3000
 ```
-
-Backend boots at `http://localhost:5001`. Healthcheck: `curl http://localhost:5001/api/health`.
 
 ### Mobile
 
 ```bash
 cd mobile
 npm install
-# put your LAN IP into src/utils/api.js BASE_URL
-npx expo start
+npx expo start             # scan QR with Expo Go (dev),
+                           # OR build APK with `eas build -p android --profile preview`
 ```
 
-Scan QR with Expo Go (SDK 54 build) on Android. Phone + PC must share Wi-Fi.
+### Supabase
 
----
-
-## 📦 Building an APK
+Run the one-shot SQL once in your project's SQL Editor:
 
 ```bash
-cd mobile
-eas login
-eas build -p android --profile preview
+backend/WQ_ALL_PATCH.sql
 ```
 
-A `.apk` URL is returned when the cloud build finishes.
+Creates: `wq_subscriptions`, `wq_daily_usage`, anon-read policies on
+`user_stats / wq_player_ranking / wq_learn_progress`, the `avatars` storage
+bucket with public access, and adds `avatar_url / avatar_emoji /
+avatar_color` columns to `wq_user_leaderboard`.
 
 ---
 
-## 🙏 Credits
+## 🎨 UI / UX features
 
-Built solo for **Google Antigravity Hackathon #AISeekho2026 — Challenge 4: Agentic Game Quest.**
+- **Cartoonish 3D style across every screen** — `ImageBackground` + teal
+  tint + wooden plaque titles (#92400e + #fbbf24 border + #451a03 bottom) +
+  chunky cards with 3px white borders + 7–9px dark bottom borders for depth.
+- **Animations everywhere** — pulsing logo glow halo, bobbing Quick Play CTA,
+  swaying sword on 1v1 Battle card, gradient yellow→green progress bar,
+  staggered card entrance, glowing tier-colored avatar ring, floating
+  particles on most screens.
+- **Tier-up celebration** — 8-step animation sequence (fade in → corner
+  confetti bursts → staggered trophies → spring-bounce badge → glow halo →
+  title slide-up → subtitle fade → bouncing green pill button), continuous
+  falling confetti for ~3s.
+- **AI Tutor chat** (Pro Max) — custom-drawn cartoon robot avatar with
+  pulsing antenna, purple chat bubbles + green user bubbles, pill input with
+  glowing border, keyboard-avoiding scroll.
+- **Onboarding** — 4 cartoonish slides (Welcome → Find Hidden Words →
+  Daily & Quiz → Climb the Tiers) with custom-drawn illustrations,
+  diagonal swipe animation, bouncing START button.
+- **Custom Avatar** — photo upload (Supabase Storage), 20 emoji avatars,
+  10 color backgrounds, 6 nameplate border styles.
+- **Sound** — synthesized 1.25s ascending fanfare win jingle (C5→E5→G5→C6 +
+  bell chord) and 0.25s "pop" word-found ding, BGM loops on Home + Game,
+  separate battle BGM.
 
-Tech: Expo · React Native · OpenAI gpt-4o-mini · Supabase · Vercel · EAS Build.
+---
+
+## 🔐 Age gating
+
+WordQuest is designed exclusively for kids aged 13 and under. On sign-up the
+date of birth is captured; if computed age > 13 the user lands on an
+"AgeBlocked" screen with a friendly cartoon owl + apologetic sign, and the
+sign-out flow resets state and sends them back to the signup form.
+
+---
+
+## 📜 Tech stack summary
+
+- **Mobile**: Expo SDK 54 · React Native 0.81 · React Navigation 7 · expo-av
+  · expo-image-picker · expo-speech · base64-arraybuffer for avatar uploads
+- **Backend**: Node.js · Express · `@supabase/supabase-js` · `openai`
+- **AI**: OpenAI `gpt-4o-mini`
+- **Database**: Supabase Postgres + Row-Level Security
+- **Storage**: Supabase Storage (avatars bucket)
+- **Hosting**: Vercel (backend), Expo Application Services (Android APK)
+
+---
+
+## 📝 License
+
+Built by [@huzi-star](https://github.com/huzi-star) for educational use.
+Originally created for the Google Antigravity Hackathon #AISeekho2026
+("Agentic Game Quest" track) and evolved into a full kid-oriented
+production app.

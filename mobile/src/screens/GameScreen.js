@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Vibration, BackHandler } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Vibration, BackHandler, ImageBackground } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const BG = require('../../home_design/home_bg.jpeg');
 import WordGrid from '../components/WordGrid';
 import WordList from '../components/WordList';
 import Timer from '../components/Timer';
@@ -8,8 +10,11 @@ import AgentThinking from '../components/AgentThinking';
 import ConfirmModal from '../components/ConfirmModal';
 import ScorePopup from '../components/ScorePopup';
 import Confetti from '../components/Confetti';
+import WordDetailCard from '../components/WordDetailCard';
+import { tierForScore } from '../utils/tiers';
 import { validateWord, explainWord } from '../utils/api';
-import { playDing, initSound } from '../utils/sound';
+import { initSound, playSfx, playBgm, stopBgm } from '../utils/sound';
+import { usePlan } from '../utils/plan';
 import { useSettings } from '../utils/settings';
 import { useTheme } from '../utils/theme';
 
@@ -47,6 +52,7 @@ function pickLine(trigger, language, vars) {
 export default function GameScreen({ navigation, route }) {
   const { settings } = useSettings();
   const theme = useTheme();
+  const { features } = usePlan();
   const {
     playerStats, sessionStats, difficulty, level, levelNumber = 0,
     isDaily = false, dailyPointsPerWord = 500,
@@ -54,6 +60,7 @@ export default function GameScreen({ navigation, route }) {
   const [selected, setSelected] = useState([]); // [{r,c,letter}]
   const [foundCells, setFoundCells] = useState([]);
   const [foundWords, setFoundWords] = useState([]);
+  const [detailWord, setDetailWord] = useState(null);
   const [score, setScore] = useState(sessionStats.score || 0);
   const [streak, setStreak] = useState(sessionStats.streak || 0);
   const [agentMsg, setAgentMsg] = useState('');
@@ -62,7 +69,7 @@ export default function GameScreen({ navigation, route }) {
   const [popups, setPopups] = useState([]); // { id, text, x, y, color }
   const [showConfetti, setShowConfetti] = useState(false);
   const [justFoundCells, setJustFoundCells] = useState([]);
-  const [hintsLeft, setHintsLeft] = useState(3);
+  const [hintsLeft, setHintsLeft] = useState(features?.hints || 1);
   const [revealedHints, setRevealedHints] = useState([]); // cells revealed by hint
   const [hintsUsedThisRound, setHintsUsedThisRound] = useState(0);
   // Random 2 gold cells inside the grid. Words covering them get 2x.
@@ -82,6 +89,11 @@ export default function GameScreen({ navigation, route }) {
 
   useEffect(() => {
     initSound();
+    playBgm('game', { volume: 0.22 });
+    return () => { stopBgm(); };
+  }, []);
+
+  useEffect(() => {
     // Cache this level's word list so a failed Level Mode retry can request
     // the same words from the backend (it just reshuffles the grid).
     if (levelNumber > 0 && Array.isArray(level?.words) && level.words.length) {
@@ -145,6 +157,9 @@ export default function GameScreen({ navigation, route }) {
   }
 
   function onTick(t) {
+    if (t !== timeLeftRef.current && t <= 10 && t > 0 && settings.sound) {
+      playSfx('tick', { volume: 0.4 });
+    }
     timeLeftRef.current = t;
     const f = firedRef.current;
     if (!f.halfTime && t <= Math.floor(difficulty.timeLimit / 2) && t > 15) {
@@ -276,10 +291,19 @@ export default function GameScreen({ navigation, route }) {
     let basePoints;
     let timeBonus;
     let totalPoints;
+    // Tier-mandated scoring: every non-daily puzzle awards a flat
+    // points-per-word amount tied to the player's current tier
+    // (Bronze=30 down to Master=10). Streak / time bonus removed —
+    // difficulty already lives in the grid + word length.
+    const tierPoints = difficulty?.pointsPerWord;
     if (isDaily) {
       basePoints = dailyPointsPerWord;
       timeBonus = 0;
       totalPoints = dailyPointsPerWord;
+    } else if (tierPoints) {
+      basePoints = tierPoints;
+      timeBonus = 0;
+      totalPoints = tierPoints;
     } else {
       basePoints = upper.length * 10;
       timeBonus = Math.floor(timeLeftSec / 10) * 5;
@@ -324,12 +348,54 @@ export default function GameScreen({ navigation, route }) {
 
       setFoundCells(mergedCells);
       setFoundWords(newFoundWords);
+      setDetailWord(wordAttempt);
       setScore(finalNewScore);
       setStreak(s => s + 1);
       if (settings.vibration) Vibration.vibrate(40);
-      if (settings.sound) playDing();
+      if (settings.sound) {
+        playSfx('word_found', { volume: 1.0 });
+        if ((streak + 1) >= 3 && (streak + 1) % 2 === 1) playSfx('streak', { volume: 0.7 });
+      }
       r.pointsEarned = totalEarned;
       r.newScore = finalNewScore;
+
+      // DAILY CHALLENGE: credit the flat 5 pts/word to totalScoreEver +
+      // highScore + leaderboard IMMEDIATELY (instead of waiting for round
+      // complete). Non-daily rounds still aggregate at round end.
+      if (isDaily) {
+        (async () => {
+          try {
+            // eslint-disable-next-line global-require
+            const { addScorePoints } = require('../utils/storage');
+            const fresh = await addScorePoints(dailyPointsPerWord);
+            // eslint-disable-next-line global-require
+            const { supabase, upsertStats } = require('../utils/supabase');
+            // eslint-disable-next-line global-require
+            const { leaderboardUpsert } = require('../utils/api');
+            if (supabase && fresh) {
+              const { data: u } = await supabase.auth.getUser();
+              const uid = u?.user?.id;
+              if (uid) {
+                await upsertStats(uid, fresh, { ...(settings || {}) });
+                const displayName =
+                  u.user.user_metadata?.display_name ||
+                  u.user.user_metadata?.full_name ||
+                  (u.user.email ? u.user.email.split('@')[0] : 'Player');
+                await leaderboardUpsert({
+                  userId: uid,
+                  displayName,
+                  avatarColor: settings?.avatarColor || null,
+                  avatarUrl: settings?.avatarUrl || null,
+                  avatarEmoji: settings?.avatarEmoji || null,
+                  totalScore: fresh.totalScoreEver || 0,
+                  highScore: fresh.highScore || 0,
+                  totalGames: fresh.totalGamesPlayed || 0,
+                });
+              }
+            }
+          } catch (_) {}
+        })();
+      }
 
       // Trigger the reveal-wave animation on the just-found word's cells.
       setJustFoundCells(cellsForWord);
@@ -372,6 +438,9 @@ export default function GameScreen({ navigation, route }) {
       clearSelection();
 
       if (newFoundWords.length === wordList.length) {
+        // Play the win jingle FIRST — before any state updates / animations —
+        // so the celebration sound starts the instant the puzzle is solved.
+        if (settings.sound) playSfx('win', { volume: 1.0 });
         setPaused(true);
         setShowConfetti(true);
         Vibration.vibrate([0, 50, 80, 50, 80, 50]);
@@ -380,6 +449,7 @@ export default function GameScreen({ navigation, route }) {
     } else {
       shakeGrid();
       setStreak(0);
+      if (settings.sound) playSfx('wrong', { volume: 0.5 });
       Vibration.vibrate(120);
       showAgent(r.message);
       clearSelection();
@@ -541,11 +611,13 @@ export default function GameScreen({ navigation, route }) {
   const currentSelection = selected.map(s => s.letter).join('');
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
-      <View style={[styles.topBar, { backgroundColor: theme.card, borderColor: theme.border }]}>
+    <ImageBackground source={BG} style={styles.bgFull} resizeMode="cover">
+      <View style={styles.tealTint} />
+      <SafeAreaView style={styles.container}>
+      <View style={styles.topBar}>
         <View style={styles.topCol}>
           <Text style={styles.topLabel}>SCORE</Text>
-          <Text style={[styles.scoreText, { color: theme.accent }]}>💰 {score}</Text>
+          <Text style={styles.scoreText}>💰 {score}</Text>
         </View>
         <View style={styles.topCol}>
           <Text style={styles.topLabel}>TIME</Text>
@@ -553,12 +625,12 @@ export default function GameScreen({ navigation, route }) {
             timeLimit={difficulty.timeLimit}
             onTimeUp={onTimeUp}
             onTick={onTick}
-            paused={paused}
+            paused={paused || !!detailWord}
           />
         </View>
         <View style={styles.topCol}>
           <Text style={styles.topLabel}>STREAK</Text>
-          <Text style={[styles.streakText, { color: theme.gold }]}>🔥 {streak}</Text>
+          <Text style={styles.streakText}>🔥 {streak}</Text>
           {streak >= 2 ? (
             <Text style={styles.comboText}>
               ⚡ {streak >= 6 ? '3x' : streak >= 4 ? '2x' : '1.5x'}
@@ -568,12 +640,12 @@ export default function GameScreen({ navigation, route }) {
       </View>
 
       <View style={styles.categoryRow}>
-        <View style={[styles.categoryPill, { backgroundColor: theme.card, borderColor: theme.accent }]}>
-          <Text style={[styles.category, { color: theme.accent }]}>
+        <View style={styles.categoryPill}>
+          <Text style={styles.category}>
             {level.categoryEmoji} {level.category}
           </Text>
         </View>
-        <View style={[styles.roundPill, { borderColor: theme.border }]}>
+        <View style={styles.roundPill}>
           <Text style={styles.roundText}>Round #{sessionStats.round}</Text>
         </View>
       </View>
@@ -596,27 +668,23 @@ export default function GameScreen({ navigation, route }) {
 
       <View style={styles.actions}>
         <TouchableOpacity
-          style={[
-            styles.btn,
-            { backgroundColor: `${theme.gold}1f`, borderColor: theme.gold, borderWidth: 1 },
-            hintsLeft <= 0 && { opacity: 0.4 },
-          ]}
+          style={[styles.btn, styles.btnHint, hintsLeft <= 0 && { opacity: 0.4 }]}
           onPress={useHint}
           disabled={hintsLeft <= 0}
         >
-          <Text style={[styles.btnText, { color: theme.gold }]}>💡 Hint ({hintsLeft})</Text>
+          <Text style={[styles.btnText, { color: '#fff' }]}>💡 Hint ({hintsLeft})</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.btn, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}
+          style={[styles.btn, styles.btnClear]}
           onPress={clearSelection}
         >
-          <Text style={[styles.btnText, { color: '#cbd5e1' }]}>✕ Clear</Text>
+          <Text style={[styles.btnText, { color: '#fff' }]}>✕ Clear</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.btn, { backgroundColor: '#7f1d1d', borderColor: '#ef4444', borderWidth: 1 }]}
+          style={[styles.btn, styles.btnQuit]}
           onPress={confirmLeave}
         >
-          <Text style={[styles.btnText, { color: '#fecaca' }]}>Quit</Text>
+          <Text style={[styles.btnText, { color: '#fff' }]}>Quit</Text>
         </TouchableOpacity>
       </View>
 
@@ -639,29 +707,78 @@ export default function GameScreen({ navigation, route }) {
         onCancel={continuePlaying}
         onConfirm={leaveGame}
       />
-    </SafeAreaView>
+      <WordDetailCard
+        visible={!!detailWord}
+        word={detailWord || ''}
+        tier={tierForScore(score).key}
+        onClose={() => setDetailWord(null)}
+      />
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  bgFull: { flex: 1 },
+  tealTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(13,80,80,0.55)' },
   container: { flex: 1, paddingHorizontal: 12, paddingTop: 105, paddingBottom: 12 },
   topBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around',
-    borderRadius: 16, paddingVertical: 12, paddingHorizontal: 12, borderWidth: 1,
+    borderRadius: 20, paddingVertical: 12, paddingHorizontal: 12,
+    backgroundColor: '#92400e',
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 7, borderBottomColor: '#451a03',
   },
   topCol: { alignItems: 'center', flex: 1 },
-  topLabel: { color: '#64748b', fontSize: 9, fontWeight: '900', letterSpacing: 1.2, marginBottom: 2 },
-  scoreText: { fontSize: 18, fontWeight: '900' },
-  streakText: { fontSize: 18, fontWeight: '900' },
-  comboText: { color: '#f97316', fontSize: 10, fontWeight: '900', marginTop: 1 },
+  topLabel: { color: '#fde68a', fontSize: 9, fontWeight: '900', letterSpacing: 1.2, marginBottom: 2 },
+  scoreText: {
+    fontSize: 18, fontWeight: '900', color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2,
+  },
+  streakText: {
+    fontSize: 18, fontWeight: '900', color: '#facc15',
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2,
+  },
+  comboText: { color: '#fb923c', fontSize: 10, fontWeight: '900', marginTop: 1 },
 
   categoryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 10 },
-  categoryPill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, borderWidth: 1 },
-  category: { fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
-  roundPill: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10, borderWidth: 1 },
-  roundText: { color: '#94a3b8', fontSize: 11, fontWeight: '700' },
+  categoryPill: {
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 5, borderBottomColor: '#0f172a',
+  },
+  category: {
+    fontSize: 14, fontWeight: '900', letterSpacing: 0.5, color: '#fde68a',
+    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2,
+  },
+  roundPill: {
+    paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderWidth: 2, borderColor: '#fff',
+    borderBottomWidth: 4, borderBottomColor: '#0f172a',
+  },
+  roundText: { color: '#fff', fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
 
   actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, gap: 8 },
-  btn: { flex: 1, paddingVertical: 13, borderRadius: 14, alignItems: 'center' },
-  btnText: { fontWeight: '900', fontSize: 13 },
+  btn: {
+    flex: 1, paddingVertical: 13, borderRadius: 16, alignItems: 'center',
+    borderWidth: 3, borderColor: '#fff',
+  },
+  btnHint: {
+    backgroundColor: '#f59e0b',
+    borderBottomWidth: 7, borderBottomColor: '#78350f',
+  },
+  btnClear: {
+    backgroundColor: '#475569',
+    borderBottomWidth: 7, borderBottomColor: '#1e293b',
+  },
+  btnQuit: {
+    backgroundColor: '#ef4444',
+    borderBottomWidth: 7, borderBottomColor: '#7f1d1d',
+  },
+  btnText: {
+    fontWeight: '900', fontSize: 13,
+    textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2,
+  },
 });

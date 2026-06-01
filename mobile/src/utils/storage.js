@@ -51,6 +51,10 @@ const DEFAULTS = {
   // Per-level personal best: { [levelNumber]: bestScore }. Shown on the
   // Levels screen so the player can chase their own record.
   levelHighScores: {},
+  // The last tier the player has seen a celebration for. Whenever
+  // tierForScore(totalScoreEver) is higher than this, the TierUp screen
+  // should be shown once, and this gets updated.
+  lastSeenTier: 'bronze',
 };
 
 function todayKey() {
@@ -178,6 +182,37 @@ export async function rememberQuizQuestions(questions) {
   } catch { return null; }
 }
 
+// Increment totalScoreEver by `delta` and bump highScore if the new total
+// exceeds it. Used by per-word / per-question scoring (Quiz + Daily) where
+// we want the points to count immediately toward tier progression AND
+// high-score AND ranking — without waiting for the round/game to end.
+export async function addScorePoints(delta) {
+  const inc = Math.max(0, Number(delta) || 0);
+  if (!inc) return null;
+  try {
+    const current = await loadStats();
+    const next = {
+      ...current,
+      totalScoreEver: (current.totalScoreEver || 0) + inc,
+    };
+    if (next.totalScoreEver > (current.highScore || 0)) {
+      next.highScore = next.totalScoreEver;
+    }
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
+}
+
+export async function markTierSeen(tierKey) {
+  if (!tierKey) return null;
+  try {
+    const current = await loadStats();
+    const next = { ...current, lastSeenTier: tierKey };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
+}
+
 export async function markOnboardingSeen() {
   try {
     const current = await loadStats();
@@ -270,4 +305,34 @@ export async function replaceStats(snapshot) {
     await AsyncStorage.setItem(K(), JSON.stringify(next));
     return next;
   } catch { return null; }
+}
+
+// Pro Max offline mode — cache last 3 generated Quick Play levels so they
+// can be loaded when offline.
+const OFFLINE_KEY = 'wq:offline:levels:v1';
+const OFFLINE_MAX = 3;
+export async function offlinePushLevel(payload) {
+  try {
+    const raw = await AsyncStorage.getItem(OFFLINE_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    arr.unshift(payload);
+    while (arr.length > OFFLINE_MAX) arr.pop();
+    await AsyncStorage.setItem(OFFLINE_KEY, JSON.stringify(arr));
+  } catch {}
+}
+export async function offlinePopLevel() {
+  try {
+    const raw = await AsyncStorage.getItem(OFFLINE_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    if (!arr.length) return null;
+    const head = arr.shift();
+    await AsyncStorage.setItem(OFFLINE_KEY, JSON.stringify(arr));
+    return head;
+  } catch { return null; }
+}
+export async function offlineCount() {
+  try {
+    const raw = await AsyncStorage.getItem(OFFLINE_KEY);
+    return raw ? JSON.parse(raw).length : 0;
+  } catch { return 0; }
 }

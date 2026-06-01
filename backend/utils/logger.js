@@ -1,5 +1,8 @@
-// In-memory ring buffer for agent traces. Lives across requests within
-// a single Vercel function instance — perfect for a dev dashboard.
+// Ring buffer + Supabase fan-out for agent traces.
+// In-memory copy serves instant dashboard reads; Supabase persists
+// everything across deployments and serverless cold starts.
+
+const supa = require('./supabaseLogger');
 
 const MAX_LOGS = 200;
 const buffer = [];
@@ -12,6 +15,8 @@ function push(entry) {
   };
   buffer.unshift(safe);
   if (buffer.length > MAX_LOGS) buffer.length = MAX_LOGS;
+  // fire-and-forget — never await, never throw
+  Promise.resolve().then(() => supa.insertLog(safe)).catch(() => {});
   return safe;
 }
 

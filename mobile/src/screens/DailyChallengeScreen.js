@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ImageBackground } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const BG = require('../../home_design/home_bg.jpeg');
 import { useFocusEffect } from '@react-navigation/native';
 import { generateLevel } from '../utils/api';
 import { useTheme } from '../utils/theme';
@@ -12,7 +14,7 @@ import { loadStats } from '../utils/storage';
 const DAILY_GRID = 10;
 const DAILY_WORDS = 10;
 const DAILY_TIME = 100;
-const DAILY_POINTS_PER_WORD = 500;
+const DAILY_POINTS_PER_WORD = 5;
 
 function nextMidnight(from = Date.now()) {
   const d = new Date(from);
@@ -100,9 +102,9 @@ export default function DailyChallengeScreen({ navigation }) {
   if (lockedUntil) {
     const remaining = Math.max(0, lockedUntil - now);
     return (
-      <View style={[styles.container, { backgroundColor: theme.bg }]}>
-        <View style={[styles.blob, { backgroundColor: theme.gold, top: -100, right: -80 }]} />
-        <SafeAreaView style={{ flex: 1 }}>
+      <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+        <View style={styles.tint} />
+        <SafeAreaView style={{ flex: 1, padding: 18 }}>
           <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.back, { borderColor: theme.border }]}>
               <Text style={styles.backIcon}>←</Text>
@@ -134,20 +136,27 @@ export default function DailyChallengeScreen({ navigation }) {
           </View>
 
           <View style={{ flex: 1 }} />
-          <TouchableOpacity style={[styles.playBtn, { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]} onPress={() => navigation.goBack()}>
-            <Text style={[styles.playText, { color: '#cbd5e1' }]}>← BACK TO HOME</Text>
+          <TouchableOpacity style={[styles.playBtn, styles.playBtnSecondary]} onPress={() => navigation.goBack()}>
+            <Text style={[styles.playText, { color: '#fff' }]}>← BACK TO HOME</Text>
           </TouchableOpacity>
         </SafeAreaView>
-      </View>
+      </ImageBackground>
     );
   }
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: theme.bg }]}>
-        <ActivityIndicator size="large" color={theme.gold} />
-        <Text style={[styles.loadText, { color: theme.gold }]}>Loading today's challenge...</Text>
-      </SafeAreaView>
+      <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+        <View style={styles.tint} />
+        <SafeAreaView style={styles.center}>
+          <View style={styles.titlePlate}>
+            <Text style={styles.titlePlateBig}>Daily Challenge</Text>
+            <Text style={styles.titlePlateSub}>LOADING TODAY'S PUZZLE</Text>
+          </View>
+          <ActivityIndicator size="large" color="#facc15" />
+          <Text style={[styles.loadText, { color: '#fde68a' }]}>Loading today's challenge...</Text>
+        </SafeAreaView>
+      </ImageBackground>
     );
   }
 
@@ -161,27 +170,30 @@ export default function DailyChallengeScreen({ navigation }) {
 
   if (!data || !hasValidLevel) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: theme.bg }]}>
-        <Text style={styles.errEmoji}>⚠️</Text>
-        <Text style={styles.errText}>Daily challenge failed to load.</Text>
-        <Text style={[styles.errText, { fontSize: 12, color: '#94a3b8', marginTop: 4 }]}>
-          AI server slow. Tap retry, or check your internet.
-        </Text>
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-          <TouchableOpacity
-            onPress={() => navigation.replace('DailyChallenge')}
-            style={[styles.retryBtn, { backgroundColor: theme.accent }]}
-          >
-            <Text style={[styles.retryText, { color: theme.bg }]}>Retry</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={[styles.retryBtn, { backgroundColor: 'rgba(148,163,184,0.1)', borderColor: theme.border, borderWidth: 1 }]}
-          >
-            <Text style={[styles.retryText, { color: '#cbd5e1' }]}>Go back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+        <View style={styles.tint} />
+        <SafeAreaView style={styles.center}>
+          <Text style={styles.errEmoji}>⚠️</Text>
+          <Text style={styles.errText}>Daily challenge failed to load.</Text>
+          <Text style={[styles.errText, { fontSize: 12, color: '#cbd5e1', marginTop: 4 }]}>
+            AI server slow. Tap retry, or check your internet.
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+            <TouchableOpacity
+              onPress={() => navigation.replace('DailyChallenge')}
+              style={[styles.retryBtn, { backgroundColor: '#22c55e', borderBottomColor: '#14532d' }]}
+            >
+              <Text style={[styles.retryText, { color: '#fff' }]}>Retry</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={[styles.retryBtn, { backgroundColor: '#3b82f6', borderBottomColor: '#1e3a8a' }]}
+            >
+              <Text style={[styles.retryText, { color: '#fff' }]}>Go back</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </ImageBackground>
     );
   }
 
@@ -196,9 +208,9 @@ export default function DailyChallengeScreen({ navigation }) {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <View style={[styles.blob, { backgroundColor: theme.gold, top: -100, right: -80 }]} />
-      <SafeAreaView style={{ flex: 1 }}>
+    <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+      <View style={styles.tint} />
+      <SafeAreaView style={{ flex: 1, padding: 18 }}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.back, { borderColor: theme.border }]}>
             <Text style={styles.backIcon}>←</Text>
@@ -253,7 +265,7 @@ export default function DailyChallengeScreen({ navigation }) {
         <View style={{ flex: 1 }} />
 
         <TouchableOpacity
-          style={[styles.playBtn, { backgroundColor: theme.gold, shadowColor: theme.gold }]}
+          style={[styles.playBtn, { backgroundColor: '#22c55e', borderBottomColor: '#14532d', shadowColor: '#22c55e' }]}
           activeOpacity={0.9}
           onPress={() =>
             navigation.replace('Game', {
@@ -269,43 +281,75 @@ export default function DailyChallengeScreen({ navigation }) {
             })
           }
         >
-          <Text style={[styles.playText, { color: '#0f172a' }]}>▶ START CHALLENGE</Text>
+          <Text style={[styles.playText, { color: '#fff' }]}>▶ START CHALLENGE</Text>
         </TouchableOpacity>
       </SafeAreaView>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 18, overflow: 'hidden' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  container: { flex: 1, overflow: 'hidden' },
+  tint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.7)' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
   loadText: { fontWeight: '700' },
-  errText: { color: '#ef4444', textAlign: 'center', fontWeight: '700' },
+  errText: { color: '#fff', textAlign: 'center', fontWeight: '900', fontSize: 16,
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
   errEmoji: { fontSize: 60 },
-  retryBtn: { padding: 12, borderRadius: 12, marginTop: 14 },
+  retryBtn: {
+    paddingHorizontal: 18, paddingVertical: 12, borderRadius: 999, marginTop: 14,
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 7,
+  },
   retryText: { fontWeight: '900' },
 
   blob: { position: 'absolute', width: 320, height: 320, borderRadius: 160, opacity: 0.13 },
 
+  // Wooden plaque
+  titlePlate: {
+    backgroundColor: '#92400e',
+    paddingHorizontal: 22, paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 7, borderBottomColor: '#451a03',
+    alignItems: 'center',
+  },
+  titlePlateBig: { color: '#fff', fontSize: 18, fontWeight: '900' },
+  titlePlateSub: { color: '#fde68a', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginTop: -2 },
+
   header: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 },
-  back: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(148,163,184,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  backIcon: { color: '#fff', fontSize: 22 },
-  title: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  back: {
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: '#3b82f6',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 6, borderBottomColor: '#1e3a8a',
+  },
+  backIcon: { color: '#fff', fontSize: 20, fontWeight: '900' },
+  title: { color: '#fff', fontSize: 22, fontWeight: '900',
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
   subtitle: { fontSize: 12, fontWeight: '700' },
 
   // Hero (unlocked) card
   heroCard: {
     borderRadius: 22, padding: 22,
-    borderWidth: 2, alignItems: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 9, borderBottomColor: '#78350f',
     shadowOpacity: 0.35, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 12,
   },
-  starWrap: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
+  starWrap: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', borderWidth: 4 },
   bigStar: { fontSize: 60 },
   heroTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 2, marginTop: 14 },
   heroCategory: { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 6, textAlign: 'center' },
 
   metaRow: { flexDirection: 'row', gap: 10, marginTop: 16, width: '100%' },
-  metaTile: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1 },
+  metaTile: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderRadius: 16, padding: 12,
+    alignItems: 'center',
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 7, borderBottomColor: '#0f172a',
+  },
   metaIcon: { fontSize: 18 },
   metaValue: { color: '#fff', fontSize: 16, fontWeight: '900', marginTop: 4 },
 
@@ -326,10 +370,13 @@ const styles = StyleSheet.create({
   // Locked state card
   lockedCard: {
     borderRadius: 22, padding: 22,
-    borderWidth: 2, alignItems: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 9, borderBottomColor: '#78350f',
     shadowOpacity: 0.35, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 12,
   },
-  lockCircle: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', borderWidth: 2, backgroundColor: 'rgba(252,211,77,0.12)' },
+  lockCircle: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', borderWidth: 4, backgroundColor: 'rgba(252,211,77,0.12)' },
   lockEmoji: { fontSize: 50 },
   lockTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 2, marginTop: 14 },
   lockSub: { color: '#cbd5e1', textAlign: 'center', marginTop: 6, fontSize: 13, lineHeight: 19 },
@@ -338,8 +385,13 @@ const styles = StyleSheet.create({
   lockTipBox: { flexDirection: 'row', backgroundColor: 'rgba(34,197,94,0.08)', borderRadius: 14, padding: 12, gap: 10, marginTop: 16, borderWidth: 1, borderColor: 'rgba(34,197,94,0.3)', alignItems: 'center' },
 
   playBtn: {
-    borderRadius: 20, paddingVertical: 18, alignItems: 'center',
+    borderRadius: 999, paddingVertical: 18, alignItems: 'center',
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 9,
     shadowOpacity: 0.55, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 14,
   },
-  playText: { fontSize: 17, fontWeight: '900', letterSpacing: 2 },
+  playBtnSecondary: {
+    backgroundColor: '#3b82f6', borderBottomColor: '#1e3a8a',
+  },
+  playText: { fontSize: 17, fontWeight: '900', letterSpacing: 2,
+    textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2 },
 });

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Animated,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Animated, ImageBackground,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -11,6 +11,8 @@ import {
   loadStats, rememberQuizTopic, rememberQuizQuestions, markQuizAttempt,
 } from '../utils/storage';
 import { Easing } from 'react-native';
+
+const BG = require('../../home_design/home_bg.jpeg');
 
 // Premium loading screen shown while gpt-4o-mini generates the quiz.
 function QuizLoading({ theme }) {
@@ -45,12 +47,16 @@ function QuizLoading({ theme }) {
   const spin = rotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
   return (
-    <View style={[styles.loadContainer, { backgroundColor: theme.bg }]}>
-      <View style={[styles.loadBlob, { backgroundColor: theme.accent, top: 80, left: -80, opacity: 0.18 }]} />
-      <View style={[styles.loadBlob, { backgroundColor: theme.accent2, bottom: 100, right: -70, opacity: 0.15 }]} />
+    <ImageBackground source={BG} style={styles.loadContainer} resizeMode="cover">
+      <View style={styles.tint} />
 
       <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <Animated.View style={[styles.loadCard, { opacity: fade, backgroundColor: theme.card, borderColor: theme.accent2, shadowColor: theme.accent2 }]}>
+        <View style={styles.titlePlate}>
+          <Text style={styles.titlePlateBig}>AI Quiz Engine</Text>
+          <Text style={styles.titlePlateSub}>GENERATING YOUR QUIZ</Text>
+        </View>
+        <Animated.View style={[styles.loadCard, { opacity: fade }]}>
+
           {/* Animated halo + core */}
           <Animated.View style={[styles.loadHaloOuter, { borderColor: `${theme.accent2}33`, transform: [{ scale: pulse }] }]}>
             <Animated.View style={[styles.loadHaloRing, { transform: [{ rotate: spin }] }]}>
@@ -93,7 +99,7 @@ function QuizLoading({ theme }) {
             <View style={styles.loadStatDivider} />
             <View style={styles.loadStatTile}>
               <Text style={styles.loadStatLabel}>PER ANSWER</Text>
-              <Text style={[styles.loadStatValue, { color: theme.gold }]}>+200</Text>
+              <Text style={[styles.loadStatValue, { color: theme.gold }]}>+2</Text>
             </View>
             <View style={styles.loadStatDivider} />
             <View style={styles.loadStatTile}>
@@ -105,13 +111,13 @@ function QuizLoading({ theme }) {
           <Text style={styles.loadFooter}>Powered by gpt-4o-mini · Fresh questions every time</Text>
         </Animated.View>
       </SafeAreaView>
-    </View>
+    </ImageBackground>
   );
 }
 
 const QUIZ_QUESTIONS = 20;
 const SECONDS_PER_QUESTION = 7;
-const POINTS_PER_CORRECT = 200;
+const POINTS_PER_CORRECT = 2;
 const LOCK_HOURS = 12;
 const LOCK_MS = LOCK_HOURS * 60 * 60 * 1000;
 
@@ -140,21 +146,13 @@ export default function QuizScreen({ navigation }) {
   const fade = useRef(new Animated.Value(0)).current;
   const tickRef = useRef(null);
 
-  // On focus: check lock status, then load quiz if unlocked.
+  // On focus: load quiz. Quiz no longer uses a 12-hour lock — daily
+  // attempt cap is enforced via the plan limit at the Home entry point.
   useFocusEffect(useCallback(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       const s = await loadStats();
-      const last = s.quizLastAttemptAt || 0;
-      const unlocksAt = last + LOCK_MS;
-      if (Date.now() < unlocksAt) {
-        if (!cancelled) {
-          setLockedUntil(unlocksAt);
-          setLoading(false);
-        }
-        return;
-      }
       setLockedUntil(0);
       const recentTopics = s.recentQuizTopics || [];
       const recentQs = s.recentQuizQuestions || [];
@@ -219,19 +217,13 @@ export default function QuizScreen({ navigation }) {
 
   async function finishQuiz() {
     setDone(true);
-    // Each correct answer is worth POINTS_PER_CORRECT — total goes into
-    // the global high score so quiz performance counts towards the
-    // player's overall record.
-    const totalQuizScore = correctCount * POINTS_PER_CORRECT;
-    try {
-      // eslint-disable-next-line global-require
-      const { saveStats } = require('../utils/storage');
-      await saveStats({ highScore: totalQuizScore });
-    } catch {}
+    // Points were already credited per-question via addScorePoints +
+    // immediate Supabase sync inside pickOption(), so finishQuiz only
+    // needs to record the cooldown attempt timestamp.
     await markQuizAttempt();
   }
 
-  function pickOption(i) {
+  async function pickOption(i) {
     if (picked !== null) return;
     if (tickRef.current) {
       clearInterval(tickRef.current);
@@ -241,6 +233,42 @@ export default function QuizScreen({ navigation }) {
     if (i === quiz.questions[idx].correctIndex) {
       setScore((s) => s + POINTS_PER_CORRECT);
       setCorrectCount((c) => c + 1);
+      // Persist these 2 points IMMEDIATELY:
+      //   a. totalScoreEver (drives tier progression)
+      //   b. highScore (auto-bumped if total exceeds it)
+      //   c. wq_user_leaderboard ranking row
+      try {
+        // eslint-disable-next-line global-require
+        const { addScorePoints } = require('../utils/storage');
+        const fresh = await addScorePoints(POINTS_PER_CORRECT);
+        // Push to Supabase user_stats + leaderboard so other devices /
+        // the tier leaderboard reflect the new total without delay.
+        // eslint-disable-next-line global-require
+        const { supabase, upsertStats } = require('../utils/supabase');
+        // eslint-disable-next-line global-require
+        const { leaderboardUpsert } = require('../utils/api');
+        if (supabase && fresh) {
+          const { data: u } = await supabase.auth.getUser();
+          const uid = u?.user?.id;
+          if (uid) {
+            await upsertStats(uid, fresh, { ...(settings || {}) });
+            const displayName =
+              u.user.user_metadata?.display_name ||
+              u.user.user_metadata?.full_name ||
+              (u.user.email ? u.user.email.split('@')[0] : 'Player');
+            await leaderboardUpsert({
+              userId: uid,
+              displayName,
+              avatarColor: settings?.avatarColor || null,
+              avatarUrl: settings?.avatarUrl || null,
+              avatarEmoji: settings?.avatarEmoji || null,
+              totalScore: fresh.totalScoreEver || 0,
+              highScore: fresh.highScore || 0,
+              totalGames: fresh.totalGamesPlayed || 0,
+            });
+          }
+        }
+      } catch (_) {}
     }
   }
   function next() {
@@ -256,8 +284,8 @@ export default function QuizScreen({ navigation }) {
   if (lockedUntil) {
     const remaining = Math.max(0, lockedUntil - now);
     return (
-      <View style={[styles.container, { backgroundColor: theme.bg }]}>
-        <View style={[styles.blob, { backgroundColor: theme.accent2, top: -120, right: -100 }]} />
+      <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+        <View style={styles.tint} />
         <SafeAreaView style={{ flex: 1, padding: 20 }}>
           <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.back, { borderColor: theme.border }]}>
@@ -284,13 +312,13 @@ export default function QuizScreen({ navigation }) {
           </View>
 
           <TouchableOpacity
-            style={[styles.btn, { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]}
+            style={[styles.btn, styles.btnSecondary]}
             onPress={() => navigation.goBack()}
           >
-            <Text style={[styles.btnText, { color: '#cbd5e1' }]}>← BACK TO HOME</Text>
+            <Text style={[styles.btnText, { color: '#fff' }]}>← BACK TO HOME</Text>
           </TouchableOpacity>
         </SafeAreaView>
-      </View>
+      </ImageBackground>
     );
   }
 
@@ -300,12 +328,15 @@ export default function QuizScreen({ navigation }) {
 
   if (!quiz) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: theme.bg }]}>
-        <Text style={styles.errText}>Quiz could not load.</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.retryBtn, { backgroundColor: theme.accent }]}>
-          <Text style={styles.retryText}>Back</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+      <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+        <View style={styles.tint} />
+        <SafeAreaView style={styles.center}>
+          <Text style={styles.errText}>Quiz could not load.</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.btn, { backgroundColor: '#22c55e', borderBottomColor: '#14532d' }]}>
+            <Text style={[styles.btnText, { color: '#fff' }]}>Back</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </ImageBackground>
     );
   }
 
@@ -315,8 +346,8 @@ export default function QuizScreen({ navigation }) {
     const pct = Math.round((correctCount / total) * 100);
     const finalScore = correctCount * POINTS_PER_CORRECT;
     return (
-      <View style={[styles.container, { backgroundColor: theme.bg }]}>
-        <View style={[styles.blob, { backgroundColor: theme.accent, top: -120, right: -100 }]} />
+      <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+        <View style={styles.tint} />
         <SafeAreaView style={{ flex: 1, padding: 20 }}>
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={styles.resultEmoji}>{pct >= 75 ? '🏆' : pct >= 50 ? '🎯' : '💪'}</Text>
@@ -332,13 +363,13 @@ export default function QuizScreen({ navigation }) {
             <Text style={styles.lockNote}>Quiz locked for {LOCK_HOURS} hours — new questions tomorrow.</Text>
           </View>
           <TouchableOpacity
-            style={[styles.btn, { backgroundColor: theme.accent }]}
+            style={[styles.btn, { backgroundColor: '#22c55e', borderBottomColor: '#14532d' }]}
             onPress={() => navigation.replace('Home')}
           >
-            <Text style={styles.btnText}>BACK TO HOME</Text>
+            <Text style={[styles.btnText, { color: '#fff' }]}>BACK TO HOME</Text>
           </TouchableOpacity>
         </SafeAreaView>
-      </View>
+      </ImageBackground>
     );
   }
 
@@ -347,8 +378,8 @@ export default function QuizScreen({ navigation }) {
   const showFeedback = picked !== null;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <View style={[styles.blob, { backgroundColor: theme.accent, top: -120, right: -100, opacity: 0.13 }]} />
+    <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+      <View style={styles.tint} />
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.back, { borderColor: theme.border }]}>
@@ -423,28 +454,45 @@ export default function QuizScreen({ navigation }) {
         {showFeedback ? (
           <View style={{ padding: 18 }}>
             <TouchableOpacity
-              style={[styles.btn, { backgroundColor: theme.accent }]}
+              style={[styles.btn, { backgroundColor: '#22c55e', borderBottomColor: '#14532d' }]}
               onPress={next}
             >
-              <Text style={styles.btnText}>
+              <Text style={[styles.btnText, { color: '#fff' }]}>
                 {idx === quiz.questions.length - 1 ? 'FINISH QUIZ' : 'NEXT QUESTION →'}
               </Text>
             </TouchableOpacity>
           </View>
         ) : null}
       </SafeAreaView>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  tint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.7)' },
+
+  // Wooden plaque title
+  titlePlate: {
+    backgroundColor: '#92400e',
+    paddingHorizontal: 22, paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 7, borderBottomColor: '#451a03',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  titlePlateBig: { color: '#fff', fontSize: 20, fontWeight: '900' },
+  titlePlateSub: { color: '#fde68a', fontSize: 10, fontWeight: '900', letterSpacing: 2.2, marginTop: -2 },
+
   // Premium loading screen
   loadContainer: { flex: 1, overflow: 'hidden' },
   loadBlob: { position: 'absolute', width: 320, height: 320, borderRadius: 160 },
   loadCard: {
     width: '100%', maxWidth: 380,
-    borderRadius: 26, borderWidth: 1.5,
-    padding: 24, alignItems: 'center',
+    borderRadius: 22, borderWidth: 3, borderColor: '#fff',
+    borderBottomWidth: 9, borderBottomColor: '#0f172a',
+    padding: 22, alignItems: 'center',
+    backgroundColor: 'rgba(15,23,42,0.85)',
     shadowOpacity: 0.45, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 18,
   },
   loadHaloOuter: {
@@ -462,12 +510,13 @@ const styles = StyleSheet.create({
   loadHaloDotSm: { position: 'absolute', right: 0, top: 60, width: 9, height: 9, borderRadius: 5, opacity: 0.85 },
   loadCore: {
     width: 64, height: 64, borderRadius: 32,
-    backgroundColor: 'rgba(15,23,42,0.7)', borderWidth: 1,
+    backgroundColor: '#0f172a', borderWidth: 4, borderColor: '#facc15',
     alignItems: 'center', justifyContent: 'center',
   },
   loadCoreIcon: { fontSize: 30 },
-  loadBrand: { marginTop: 18, fontSize: 11, fontWeight: '900', letterSpacing: 2.5 },
-  loadTitle: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 4, letterSpacing: 0.5 },
+  loadBrand: { marginTop: 18, fontSize: 11, fontWeight: '900', letterSpacing: 2.5, color: '#fde68a' },
+  loadTitle: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 4, letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
   loadStepRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     marginTop: 14, paddingHorizontal: 8, minHeight: 40,
@@ -490,59 +539,100 @@ const styles = StyleSheet.create({
 
   container: { flex: 1, overflow: 'hidden' },
   blob: { position: 'absolute', width: 320, height: 320, borderRadius: 160 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 20 },
   loadText: { fontWeight: '700' },
-  errText: { color: '#ef4444' },
+  errText: { color: '#fff', fontSize: 16, fontWeight: '900' },
   retryBtn: { padding: 12, borderRadius: 12 },
   retryText: { color: '#0f172a', fontWeight: '900' },
 
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 18 },
-  back: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(148,163,184,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  backIcon: { color: '#fff', fontSize: 22 },
-  title: { fontSize: 18, fontWeight: '900' },
-  subtitle: { color: '#94a3b8', fontSize: 12 },
-  scorePill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
-  scoreText: { fontWeight: '900', fontSize: 14 },
+  back: {
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: '#3b82f6',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 6, borderBottomColor: '#1e3a8a',
+  },
+  backIcon: { color: '#fff', fontSize: 20, fontWeight: '900' },
+  title: { fontSize: 18, fontWeight: '900', color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
+  subtitle: { color: '#cbd5e1', fontSize: 12, fontWeight: '700' },
+  scorePill: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999,
+    borderWidth: 2, backgroundColor: '#78350f', borderColor: '#fbbf24',
+  },
+  scoreText: { fontWeight: '900', fontSize: 14, color: '#fef3c7' },
   pillsRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
-  timePill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
+  timePill: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999,
+    borderWidth: 2,
+  },
   timeText: { fontWeight: '900', fontSize: 14 },
 
-  qCard: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 16, borderWidth: 1 },
-  qText: { color: '#fff', fontSize: 17, lineHeight: 24, fontWeight: '600' },
+  qCard: {
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderRadius: 18, padding: 16,
+    borderWidth: 3, borderColor: '#fff',
+    borderBottomWidth: 7, borderBottomColor: '#0f172a',
+  },
+  qText: { color: '#fff', fontSize: 17, lineHeight: 24, fontWeight: '700' },
 
-  optCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14, borderWidth: 1, gap: 12 },
-  optLetter: { fontSize: 18, fontWeight: '900', width: 24 },
-  optText: { color: '#fff', flex: 1, fontSize: 14 },
+  optCard: {
+    flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 16,
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 7, borderBottomColor: '#0f172a',
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    gap: 12,
+  },
+  optLetter: { fontSize: 18, fontWeight: '900', width: 24, color: '#fde68a' },
+  optText: { color: '#fff', flex: 1, fontSize: 14, fontWeight: '700' },
   tick: { color: '#22c55e', fontSize: 22, fontWeight: '900' },
   cross: { color: '#ef4444', fontSize: 22, fontWeight: '900' },
 
-  explainCard: { padding: 14, borderRadius: 14, borderWidth: 1, backgroundColor: 'rgba(252,211,77,0.05)' },
-  explainLabel: { fontWeight: '900', fontSize: 11, letterSpacing: 1.2, marginBottom: 4 },
-  explainText: { color: '#fed7aa', fontSize: 14, lineHeight: 20 },
+  explainCard: {
+    padding: 14, borderRadius: 18,
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 7, borderBottomColor: '#78350f',
+    backgroundColor: 'rgba(15,23,42,0.85)',
+  },
+  explainLabel: { fontWeight: '900', fontSize: 11, letterSpacing: 1.4, marginBottom: 4, color: '#fde68a' },
+  explainText: { color: '#fff', fontSize: 14, lineHeight: 20, fontWeight: '600' },
 
-  btn: { paddingVertical: 16, borderRadius: 20, alignItems: 'center' },
-  btnText: { color: '#0f172a', fontWeight: '900', fontSize: 16, letterSpacing: 1 },
+  btn: {
+    paddingVertical: 16, borderRadius: 999, alignItems: 'center',
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 9,
+  },
+  btnSecondary: {
+    backgroundColor: '#3b82f6', borderBottomColor: '#1e3a8a',
+  },
+  btnText: { color: '#fff', fontWeight: '900', fontSize: 16, letterSpacing: 1,
+    textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2 },
 
   // Results
   resultEmoji: { fontSize: 80 },
-  resultTitle: { fontSize: 26, fontWeight: '900', marginTop: 8 },
+  resultTitle: { fontSize: 26, fontWeight: '900', marginTop: 8, color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
   totalCard: {
     marginTop: 24, paddingHorizontal: 30, paddingVertical: 22,
-    borderRadius: 22, borderWidth: 2, alignItems: 'center',
+    borderRadius: 22, alignItems: 'center',
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 9, borderBottomColor: '#78350f',
     shadowOpacity: 0.4, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 12,
   },
   totalLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 2 },
   totalValue: { fontSize: 60, fontWeight: '900', marginTop: 4 },
-  totalMeta: { color: '#cbd5e1', fontSize: 13, marginTop: 4 },
-  topic: { color: '#94a3b8', fontSize: 14, marginTop: 16 },
+  totalMeta: { color: '#cbd5e1', fontSize: 13, marginTop: 4, fontWeight: '700' },
+  topic: { color: '#cbd5e1', fontSize: 14, marginTop: 16, fontWeight: '700' },
   lockNote: { color: '#fcd34d', fontSize: 12, marginTop: 8, fontWeight: '700' },
 
   // Locked card
   lockedCard: {
-    borderRadius: 22, padding: 22, borderWidth: 2, alignItems: 'center',
+    borderRadius: 22, padding: 22, alignItems: 'center',
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderWidth: 3, borderColor: '#fff',
+    borderBottomWidth: 9, borderBottomColor: '#0f172a',
     shadowOpacity: 0.35, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 12,
   },
-  lockCircle: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', borderWidth: 2, backgroundColor: 'rgba(167,139,250,0.12)' },
+  lockCircle: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', borderWidth: 4, backgroundColor: 'rgba(167,139,250,0.12)' },
   lockEmoji: { fontSize: 50 },
   lockTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 2, marginTop: 14 },
   lockSub: { color: '#cbd5e1', textAlign: 'center', marginTop: 6, fontSize: 13, lineHeight: 19 },

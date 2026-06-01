@@ -16,9 +16,17 @@ function K() {
 export const DEFAULTS = {
   sound: true,
   vibration: true,
-  language: 'english',       // default = English. 'urdu' (Roman) also available.
+  language: 'english',       // App is English-only now. Kept for backwards compat.
   theme: 'green',            // 'green' | 'gold' | 'purple' | 'neon'
   hasSeenOnboarding: false,
+  dob: null, // 'YYYY-MM-DD' once set on signup
+  // Pro Max custom avatar
+  avatarEmoji: null,
+  avatarColor: null,
+  avatarBorder: null,
+  avatarUrl: null,
+  // Pro Max offline mode toggle
+  offlineMode: false,
 };
 
 // UI chrome only — game content (puzzle words, agent messages) comes from
@@ -154,6 +162,11 @@ async function persist(settings) {
 
 const SettingsContext = createContext({ settings: DEFAULTS, setSetting: () => {}, t: (k) => k, ready: false, refresh: async () => {}, applyServer: () => {} });
 
+// Module-level snapshot so non-React modules (like the sound manager) can
+// check toggles without re-rendering.
+let currentSettings = DEFAULTS;
+export function getSettings() { return currentSettings; }
+
 export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState(DEFAULTS);
   const [ready, setReady] = useState(false);
@@ -162,10 +175,13 @@ export function SettingsProvider({ children }) {
     (async () => {
       const s = await loadSettings();
       setSettings(s);
+      currentSettings = s;
       setApiLanguage(s.language);
       setReady(true);
     })();
   }, []);
+
+  useEffect(() => { currentSettings = settings; }, [settings]);
 
   const setSetting = (key, value) => {
     setSettings((prev) => {

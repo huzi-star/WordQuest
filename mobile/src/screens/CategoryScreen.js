@@ -1,11 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Easing,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Easing, ImageBackground,
 } from 'react-native';
+
+const BG = require('../../home_design/home_bg.jpeg');
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { generateLevel } from '../utils/api';
 import { useTheme } from '../utils/theme';
 import { useSettings } from '../utils/settings';
+import { loadStats } from '../utils/storage';
+import { tierForScore } from '../utils/tiers';
+import { stopBgm } from '../utils/sound';
+import { offlinePushLevel, offlinePopLevel } from '../utils/storage';
 
 const STEPS = {
   english: [
@@ -52,43 +58,45 @@ function LoadingState({ theme, language }) {
   const spin = rotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
   return (
-    <View style={styles.loadWrap}>
-      <View style={[styles.loadBlob, { backgroundColor: theme.accent, top: 60, left: -80, opacity: 0.18 }]} />
-      <View style={[styles.loadBlob, { backgroundColor: theme.accent2, bottom: 80, right: -60, opacity: 0.14 }]} />
-
-      <Animated.View style={[styles.spinnerOuter, { borderColor: `${theme.accent}33`, transform: [{ scale: breathe }] }]}>
-        <Animated.View style={[styles.spinnerRing, { transform: [{ rotate: spin }] }]}>
-          <View style={[styles.spinnerDotTop, { backgroundColor: theme.accent, shadowColor: theme.accent }]} />
-          <View style={[styles.spinnerDotRight, { backgroundColor: theme.accent2 }]} />
+    <ImageBackground source={BG} style={styles.bgFull} resizeMode="cover">
+      <View style={styles.tealTint} />
+      <View style={styles.loadWrap}>
+        <Animated.View style={[styles.spinnerOuter, { transform: [{ scale: breathe }] }]}>
+          <Animated.View style={[styles.spinnerRing, { transform: [{ rotate: spin }] }]}>
+            <View style={styles.spinnerDotTop} />
+            <View style={styles.spinnerDotRight} />
+            <View style={styles.spinnerDotBottom} />
+          </Animated.View>
+          <View style={styles.spinnerCore}>
+            <Text style={styles.spinnerCoreIcon}>🤖</Text>
+          </View>
         </Animated.View>
-        <View style={styles.spinnerCore}>
-          <Text style={styles.spinnerCoreIcon}>🤖</Text>
+
+        <View style={styles.titlePlate}>
+          <Text style={styles.titlePlateBig}>AI Agents at Work</Text>
+          <Text style={styles.titlePlateSub}>BUILDING YOUR LEVEL</Text>
         </View>
-      </Animated.View>
 
-      <Text style={styles.loadTitle}>AI agents at work</Text>
-      <Animated.View
-        style={[
-          styles.loadStep,
-          { opacity: dotAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) },
-        ]}
-      >
-        <Text style={styles.loadIcon}>{stepList[stepIdx].icon}</Text>
-        <Text style={styles.loadText}>{stepList[stepIdx].text}</Text>
-      </Animated.View>
+        <Animated.View
+          style={[
+            styles.stepCard,
+            { opacity: dotAnim.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }) },
+          ]}
+        >
+          <Text style={styles.stepIcon}>{stepList[stepIdx].icon}</Text>
+          <Text style={styles.stepText}>{stepList[stepIdx].text}</Text>
+        </Animated.View>
 
-      <View style={styles.stepDots}>
-        {stepList.map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.stepDot,
-              i === stepIdx && [styles.stepDotActive, { backgroundColor: theme.accent }],
-            ]}
-          />
-        ))}
+        <View style={styles.stepDots}>
+          {stepList.map((_, i) => (
+            <View
+              key={i}
+              style={[styles.stepDot, i === stepIdx && styles.stepDotActive]}
+            />
+          ))}
+        </View>
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
@@ -120,25 +128,40 @@ export default function CategoryScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [tierObj, setTierObj] = useState(null);
 
   const fadeIn = useRef(new Animated.Value(0)).current;
   const heroScale = useRef(new Animated.Value(0.7)).current;
   const ctaPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    stopBgm();
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const res = await generateLevel(playerStats, {
+      const s = await loadStats();
+      const myTier = tierForScore(s?.totalScoreEver || 0);
+      setTierObj(myTier);
+      const tier = myTier.key;
+      let res = await generateLevel(playerStats, {
         levelNumber,
-        // Level-Mode retry: send same words, backend reshuffles into new grid.
+        tier,
         reshuffleWords, reshuffleCategory, reshuffleEmoji, reshuffleFunFact,
       });
       if (cancelled) return;
+      // Offline fallback — if the request failed, try a cached level.
+      if (!res || !res.ok) {
+        const cached = await offlinePopLevel();
+        if (cached) res = cached;
+      }
       if (!res || !res.ok) {
         setError(res?.error || 'AI ne response nahi diya. Backend check karo.');
         setLoading(false);
         return;
+      }
+      // Cache this freshly-generated level so it's playable when offline.
+      if (res.ok && !levelNumber) {
+        try { await offlinePushLevel(res); } catch {}
       }
       setData(res);
       setLoading(false);
@@ -158,7 +181,7 @@ export default function CategoryScreen({ navigation, route }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+      <SafeAreaView style={styles.container}>
         <LoadingState theme={theme} language={settings.language} />
       </SafeAreaView>
     );
@@ -171,29 +194,33 @@ export default function CategoryScreen({ navigation, route }) {
     );
   }
 
-  const { difficulty, level, chaalbaazActive } = data;
+  const { difficulty: rawDifficulty, level, chaalbaazActive } = data;
+  // Tier-mandated overrides — the player's current tier is the source of
+  // truth for grid size, word count, timer, and points-per-word.
+  const cfg = tierObj?.puzzle || {};
+  const difficulty = {
+    ...rawDifficulty,
+    gridSize: cfg.gridSize || rawDifficulty.gridSize,
+    wordCount: cfg.wordCount || rawDifficulty.wordCount,
+    timeLimit: cfg.timeLimit || rawDifficulty.timeLimit,
+    pointsPerWord: cfg.pointsPerWord,
+    tier: tierObj?.key,
+  };
   const dColor = difficulty.difficulty === 'easy' ? theme.accent : difficulty.difficulty === 'medium' ? theme.gold : '#ef4444';
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <View style={[styles.bgBlob, { backgroundColor: dColor, top: -120, right: -100 }]} />
-      <View style={[styles.bgBlob, { backgroundColor: theme.accent2, bottom: -140, left: -100, opacity: 0.14 }]} />
+    <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+      <View style={styles.tealTint} />
 
       <SafeAreaView style={{ flex: 1 }}>
         {/* HEADER with back button */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.back, { borderColor: theme.border }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
             <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
-          {levelNumber > 0 ? (
-            <View style={[styles.levelPill, { borderColor: theme.accent, backgroundColor: `${theme.accent}1a` }]}>
-              <Text style={[styles.levelPillText, { color: theme.accent }]}>LEVEL {levelNumber}</Text>
-            </View>
-          ) : (
-            <View style={[styles.levelPill, { borderColor: theme.accent2, backgroundColor: `${theme.accent2}1a` }]}>
-              <Text style={[styles.levelPillText, { color: theme.accent2 }]}>QUICK PLAY</Text>
-            </View>
-          )}
+          <View style={styles.levelPill}>
+            <Text style={styles.levelPillText}>{levelNumber > 0 ? `LEVEL ${levelNumber}` : 'QUICK PLAY'}</Text>
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -206,14 +233,14 @@ export default function CategoryScreen({ navigation, route }) {
 
           {/* HERO */}
           <Animated.View style={[styles.heroWrap, { opacity: fadeIn, transform: [{ scale: heroScale }] }]}>
-            <Text style={[styles.aiHint, { color: theme.accent }]}>🤖 AI ne choose kiya</Text>
-            <View style={[styles.heroCircle, { borderColor: dColor, shadowColor: dColor, backgroundColor: theme.card }]}>
+            <Text style={styles.aiHint}>🤖 AI PICKED FOR YOU</Text>
+            <View style={styles.heroCircle}>
               <Text style={styles.heroEmoji}>{level.categoryEmoji || '🎯'}</Text>
             </View>
             <Text style={styles.heroCategory}>{level.category}</Text>
 
             <View style={[styles.diffPill, { backgroundColor: dColor }]}>
-              <Text style={[styles.diffPillText, { color: theme.bg }]}>
+              <Text style={[styles.diffPillText, { color: '#fff' }]}>
                 {diffEmoji(difficulty.difficulty)} {(difficulty.difficulty || '').toUpperCase()}
               </Text>
             </View>
@@ -221,21 +248,21 @@ export default function CategoryScreen({ navigation, route }) {
 
           {/* META TILES */}
           <Animated.View style={[styles.metaRow, { opacity: fadeIn }]}>
-            <View style={[styles.metaTile, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={styles.metaTile}>
               <View style={[styles.metaIconWrap, { backgroundColor: `${theme.accent}22`, borderColor: theme.accent }]}>
                 <Text style={styles.metaIcon}>⏱</Text>
               </View>
               <Text style={[styles.metaValue, { color: theme.accent }]}>{difficulty.timeLimit}s</Text>
               <Text style={styles.metaLabel}>TIME</Text>
             </View>
-            <View style={[styles.metaTile, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={styles.metaTile}>
               <View style={[styles.metaIconWrap, { backgroundColor: `${theme.gold}22`, borderColor: theme.gold }]}>
                 <Text style={styles.metaIcon}>🔤</Text>
               </View>
               <Text style={[styles.metaValue, { color: theme.gold }]}>{difficulty.wordCount}</Text>
               <Text style={styles.metaLabel}>WORDS</Text>
             </View>
-            <View style={[styles.metaTile, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={styles.metaTile}>
               <View style={[styles.metaIconWrap, { backgroundColor: `${theme.accent2}22`, borderColor: theme.accent2 }]}>
                 <Text style={styles.metaIcon}>🎮</Text>
               </View>
@@ -245,78 +272,116 @@ export default function CategoryScreen({ navigation, route }) {
           </Animated.View>
 
           {/* AI REASONING CARD */}
-          <Animated.View style={[styles.reasonCard, { backgroundColor: theme.card, borderColor: theme.border, opacity: fadeIn }]}>
+          <Animated.View style={[styles.reasonCard, { opacity: fadeIn }]}>
             <View style={styles.reasonHeader}>
               <Text style={styles.reasonHeaderIcon}>💭</Text>
-              <Text style={[styles.reasonHeaderText, { color: theme.accent }]}>AI ka sochna</Text>
+              <Text style={styles.reasonHeaderText}>AI THINKING</Text>
             </View>
             <Text style={styles.reasonText}>{difficulty.reason}</Text>
           </Animated.View>
 
           {/* FUN FACT CARD */}
-          <Animated.View
-            style={[
-              styles.funFactCard,
-              { backgroundColor: `${theme.accent}0d`, borderColor: theme.accent, opacity: fadeIn },
-            ]}
-          >
+          <Animated.View style={[styles.funFactCard, { opacity: fadeIn }]}>
             <View style={styles.reasonHeader}>
               <Text style={styles.reasonHeaderIcon}>💡</Text>
-              <Text style={[styles.reasonHeaderText, { color: theme.accent }]}>Fun Fact</Text>
+              <Text style={[styles.reasonHeaderText, { color: '#86efac' }]}>FUN FACT</Text>
             </View>
-            <Text style={[styles.funFactText, { color: '#e2e8f0' }]}>{level.funFact}</Text>
+            <Text style={styles.funFactText}>{level.funFact}</Text>
           </Animated.View>
 
           {/* CTA */}
           <Animated.View style={{ transform: [{ scale: ctaPulse }] }}>
             <TouchableOpacity
               activeOpacity={0.9}
-              style={[styles.startBtn, { backgroundColor: theme.accent, shadowColor: theme.accent }]}
+              style={styles.startBtn}
               onPress={() =>
                 navigation.replace('Game', {
                   playerStats, sessionStats, difficulty, level, levelNumber,
                 })
               }
             >
-              <Text style={[styles.startBtnText, { color: theme.bg }]}>TAYAAR HUN! →</Text>
+              <Text style={styles.startBtnText}>LET'S PLAY →</Text>
             </TouchableOpacity>
           </Animated.View>
 
           <View style={{ height: 18 }} />
         </ScrollView>
       </SafeAreaView>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: 'hidden' },
-  bgBlob: { position: 'absolute', width: 340, height: 340, borderRadius: 170, opacity: 0.16 },
+  bgFull: { flex: 1 },
+  tealTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(13,80,80,0.55)' },
   scroll: { paddingHorizontal: 16, paddingTop: 4, gap: 12 },
 
   // Header
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
-  back: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(148,163,184,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  backIcon: { color: '#fff', fontSize: 22 },
-  levelPill: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, borderWidth: 1 },
-  levelPillText: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+  back: {
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: '#3b82f6',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 6, borderBottomColor: '#1e3a8a',
+  },
+  backIcon: { color: '#fff', fontSize: 20, fontWeight: '900' },
+  levelPill: {
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999,
+    backgroundColor: '#78350f',
+    borderWidth: 2, borderColor: '#fbbf24',
+  },
+  levelPillText: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, color: '#fef3c7' },
 
-  // Loading state
-  loadWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
-  loadBlob: { position: 'absolute', width: 280, height: 280, borderRadius: 140 },
-  spinnerOuter: { width: 140, height: 140, borderRadius: 70, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
-  spinnerRing: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center' },
-  spinnerDotTop: { position: 'absolute', top: -4, width: 16, height: 16, borderRadius: 8, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 0 } },
-  spinnerDotRight: { position: 'absolute', right: -4, top: 52, width: 10, height: 10, borderRadius: 5, opacity: 0.7 },
-  spinnerCore: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(15,23,42,0.7)', alignItems: 'center', justifyContent: 'center' },
-  spinnerCoreIcon: { fontSize: 28 },
-  loadTitle: { color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: 1 },
-  loadStep: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 24 },
-  loadIcon: { fontSize: 24 },
-  loadText: { color: '#cbd5e1', fontSize: 14, flex: 1 },
-  stepDots: { flexDirection: 'row', gap: 6 },
-  stepDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#334155' },
-  stepDotActive: { width: 22 },
+  // Loading state — cartoonish
+  loadWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 22 },
+  spinnerOuter: {
+    width: 170, height: 170, borderRadius: 85,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 5, borderColor: '#a16207',
+  },
+  spinnerRing: {
+    position: 'absolute',
+    width: 170, height: 170, borderRadius: 85,
+    borderWidth: 4, borderColor: 'rgba(252,211,21,0.7)',
+    borderStyle: 'dashed',
+  },
+  spinnerDotTop: { position: 'absolute', top: -10, left: 76, width: 18, height: 18, borderRadius: 9, backgroundColor: '#facc15', borderWidth: 2, borderColor: '#fff' },
+  spinnerDotRight: { position: 'absolute', right: -10, top: 76, width: 14, height: 14, borderRadius: 7, backgroundColor: '#22c55e', borderWidth: 2, borderColor: '#fff' },
+  spinnerDotBottom: { position: 'absolute', bottom: -8, left: 78, width: 14, height: 14, borderRadius: 7, backgroundColor: '#ec4899', borderWidth: 2, borderColor: '#fff' },
+  spinnerCore: {
+    width: 90, height: 90, borderRadius: 45,
+    backgroundColor: '#0f172a',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 4, borderColor: '#facc15',
+  },
+  spinnerCoreIcon: { fontSize: 44 },
+
+  titlePlate: {
+    backgroundColor: '#92400e',
+    paddingHorizontal: 24, paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 7, borderBottomColor: '#451a03',
+    alignItems: 'center',
+  },
+  titlePlateBig: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  titlePlateSub: { color: '#fde68a', fontSize: 10, fontWeight: '900', letterSpacing: 2.2, marginTop: -2 },
+
+  stepCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 14, paddingVertical: 10,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderRadius: 16,
+    borderWidth: 2, borderColor: '#fbbf24',
+    maxWidth: '90%',
+  },
+  stepIcon: { fontSize: 26 },
+  stepText: { color: '#fef3c7', fontSize: 13, fontWeight: '800', flexShrink: 1 },
+  stepDots: { flexDirection: 'row', gap: 8 },
+  stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.35)' },
+  stepDotActive: { width: 28, backgroundColor: '#facc15' },
 
   // Error
   errEmoji: { fontSize: 64 },
@@ -336,48 +401,77 @@ const styles = StyleSheet.create({
 
   // Hero
   heroWrap: { alignItems: 'center', paddingVertical: 6 },
-  aiHint: { fontSize: 10, letterSpacing: 1.5, fontWeight: '900', marginBottom: 10 },
+  aiHint: {
+    fontSize: 11, letterSpacing: 1.8, fontWeight: '900', marginBottom: 12,
+    color: '#fde68a', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3,
+  },
   heroCircle: {
-    width: 130, height: 130, borderRadius: 65,
+    width: 140, height: 140, borderRadius: 70,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 3,
-    shadowOpacity: 0.55, shadowRadius: 26, shadowOffset: { width: 0, height: 0 },
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 5, borderColor: '#a16207',
+    shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
     elevation: 14,
   },
-  heroEmoji: { fontSize: 70 },
-  heroCategory: { color: '#fff', fontSize: 28, fontWeight: '900', marginTop: 14, textAlign: 'center', letterSpacing: 0.5 },
-  diffPill: { marginTop: 10, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 14 },
-  diffPillText: { fontWeight: '900', letterSpacing: 1 },
+  heroEmoji: { fontSize: 78 },
+  heroCategory: {
+    color: '#fff', fontSize: 30, fontWeight: '900', marginTop: 14, textAlign: 'center', letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 3 }, textShadowRadius: 4,
+  },
+  diffPill: {
+    marginTop: 12, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 999,
+    borderWidth: 2, borderColor: '#fff',
+    borderBottomWidth: 6, borderBottomColor: 'rgba(0,0,0,0.35)',
+  },
+  diffPillText: { fontWeight: '900', letterSpacing: 1.2, fontSize: 12 },
 
-  // Meta tiles
+  // Meta tiles — chunky 3D
   metaRow: { flexDirection: 'row', gap: 10 },
   metaTile: {
     flex: 1, borderRadius: 16, padding: 12,
-    alignItems: 'center', borderWidth: 1,
+    alignItems: 'center',
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderWidth: 3, borderColor: '#fff',
+    borderBottomWidth: 7, borderBottomColor: '#0f172a',
   },
   metaIconWrap: {
-    width: 38, height: 38, borderRadius: 19,
+    width: 42, height: 42, borderRadius: 21,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, marginBottom: 6,
+    borderWidth: 2, marginBottom: 6,
   },
-  metaIcon: { fontSize: 18 },
-  metaValue: { fontSize: 18, fontWeight: '900' },
-  metaLabel: { color: '#64748b', fontSize: 9, fontWeight: '900', letterSpacing: 1.2, marginTop: 2 },
+  metaIcon: { fontSize: 20 },
+  metaValue: { fontSize: 20, fontWeight: '900' },
+  metaLabel: { color: '#cbd5e1', fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginTop: 2 },
 
   // Reason / fun-fact cards
-  reasonCard: { borderRadius: 16, padding: 14, borderWidth: 1 },
-  reasonHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  reasonHeaderIcon: { fontSize: 16 },
-  reasonHeaderText: { fontWeight: '900', fontSize: 11, letterSpacing: 1.2 },
-  reasonText: { color: '#fff', fontSize: 14, lineHeight: 20 },
-
-  funFactCard: { borderRadius: 16, padding: 14, borderWidth: 1 },
-  funFactText: { fontSize: 14, lineHeight: 20 },
-
-  // Primary CTA
-  startBtn: {
-    borderRadius: 22, paddingVertical: 17, alignItems: 'center', marginTop: 8,
-    shadowOpacity: 0.5, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 14,
+  reasonCard: {
+    borderRadius: 18, padding: 14,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderWidth: 2, borderColor: '#fbbf24',
   },
-  startBtnText: { fontSize: 17, fontWeight: '900', letterSpacing: 1.5 },
+  reasonHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  reasonHeaderIcon: { fontSize: 18 },
+  reasonHeaderText: { fontWeight: '900', fontSize: 12, letterSpacing: 1.4, color: '#fde68a' },
+  reasonText: { color: '#fff', fontSize: 14, lineHeight: 20, fontWeight: '600' },
+
+  funFactCard: {
+    borderRadius: 18, padding: 14,
+    backgroundColor: 'rgba(34,197,94,0.18)',
+    borderWidth: 2, borderColor: '#22c55e',
+  },
+  funFactText: { fontSize: 14, lineHeight: 20, color: '#dcfce7', fontWeight: '600' },
+
+  // Primary CTA — chunky green
+  startBtn: {
+    borderRadius: 999, paddingVertical: 18, alignItems: 'center', marginTop: 8,
+    backgroundColor: '#22c55e',
+    borderWidth: 3, borderColor: '#fff',
+    borderBottomWidth: 9, borderBottomColor: '#14532d',
+    shadowColor: '#22c55e', shadowOpacity: 0.5, shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
+    elevation: 12,
+  },
+  startBtnText: {
+    fontSize: 18, fontWeight: '900', letterSpacing: 1.5, color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2,
+  },
 });

@@ -1,8 +1,12 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, ImageBackground } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const BG = require('../../home_design/home_bg.jpeg');
 import { useFocusEffect } from '@react-navigation/native';
 import { loadStats } from '../utils/storage';
+import { useAuth } from '../utils/auth';
+import { battleGetRanking } from '../utils/api';
 
 function fmtTime(sec) {
   const s = Math.floor(sec);
@@ -133,7 +137,9 @@ function Heatmap({ activeDays }) {
 
 export default function StatsScreen({ navigation }) {
   const [stats, setStats] = useState(null);
+  const [ranking, setRanking] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useFocusEffect(
     useCallback(() => {
@@ -143,16 +149,23 @@ export default function StatsScreen({ navigation }) {
         if (cancelled) return;
         setStats(s);
         setLoading(false);
+        if (user?.id) {
+          const r = await battleGetRanking(user.id);
+          if (!cancelled && r?.ok) setRanking(r.ranking);
+        }
       })();
       return () => { cancelled = true; };
-    }, [])
+    }, [user?.id])
   );
 
   if (loading || !stats) {
     return (
-      <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color="#22c55e" />
-      </SafeAreaView>
+      <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+        <View style={styles.tint} />
+        <SafeAreaView style={styles.center}>
+          <ActivityIndicator size="large" color="#22c55e" />
+        </SafeAreaView>
+      </ImageBackground>
     );
   }
 
@@ -169,9 +182,8 @@ export default function StatsScreen({ navigation }) {
   const { level, current, needed, progress } = levelFromXp(xp);
 
   return (
-    <View style={styles.container}>
-      <View style={[styles.bgBlob, { backgroundColor: '#22c55e', top: -100, right: -80 }]} />
-      <View style={[styles.bgBlob, { backgroundColor: '#a78bfa', bottom: -100, left: -80, opacity: 0.1 }]} />
+    <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+      <View style={styles.tint} />
 
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -180,9 +192,9 @@ export default function StatsScreen({ navigation }) {
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
               <Text style={styles.backIcon}>←</Text>
             </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>📊 My Stats</Text>
-              <Text style={styles.subtitle}>Your full journey</Text>
+            <View style={styles.titlePlate}>
+              <Text style={styles.titlePlateBig}>📊 My Stats</Text>
+              <Text style={styles.titlePlateSub}>YOUR FULL JOURNEY</Text>
             </View>
           </View>
 
@@ -203,6 +215,20 @@ export default function StatsScreen({ navigation }) {
               </View>
             </View>
           </View>
+
+          {/* Battle ranking — MMR + W/L */}
+          {ranking ? (
+            <View style={styles.podRow}>
+              <StatPod icon="⚔️" label="BATTLES W/L" value={`${ranking.wins || 0}/${ranking.losses || 0}`} accent="#f472b6" />
+              <StatPod
+                icon={ranking.current_streak > 0 ? '🔥' : ranking.current_streak < 0 ? '🥶' : '⚖️'}
+                label="STREAK"
+                value={ranking.current_streak > 0 ? `+${ranking.current_streak} W` : ranking.current_streak < 0 ? `${ranking.current_streak} L` : '0'}
+                accent="#a78bfa"
+              />
+              <StatPod icon="🎯" label="MMR" value={ranking.mmr || 1000} accent="#34d399" />
+            </View>
+          ) : null}
 
           {/* Top stat pods */}
           <View style={styles.podRow}>
@@ -279,33 +305,46 @@ export default function StatsScreen({ navigation }) {
           <View style={{ height: 30 }} />
         </ScrollView>
       </SafeAreaView>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#070b14', overflow: 'hidden' },
+  container: { flex: 1, overflow: 'hidden' },
+  tint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.7)' },
   bgBlob: { position: 'absolute', width: 320, height: 320, borderRadius: 160, opacity: 0.13 },
-  center: { flex: 1, backgroundColor: '#070b14', justifyContent: 'center', alignItems: 'center' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 16, gap: 10 },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 8 },
   backBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: 'rgba(148,163,184,0.1)',
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: '#3b82f6',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#1f2937',
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 6, borderBottomColor: '#1e3a8a',
   },
-  backIcon: { color: '#fff', fontSize: 22 },
+  backIcon: { color: '#fff', fontSize: 20, fontWeight: '900' },
+  titlePlate: {
+    flex: 1,
+    backgroundColor: '#92400e',
+    paddingHorizontal: 18, paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 7, borderBottomColor: '#451a03',
+    alignItems: 'center',
+  },
+  titlePlateBig: { color: '#fff', fontSize: 18, fontWeight: '900' },
+  titlePlateSub: { color: '#fde68a', fontSize: 9, fontWeight: '900', letterSpacing: 2, marginTop: -2 },
   title: { color: '#fff', fontSize: 24, fontWeight: '900' },
-  subtitle: { color: '#94a3b8', fontSize: 12 },
+  subtitle: { color: '#cbd5e1', fontSize: 12 },
 
   // Level / XP hero
   heroCard: {
-    backgroundColor: '#0e1726',
-    borderRadius: 18,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderRadius: 20,
     padding: 16,
-    borderWidth: 1, borderColor: '#22c55e',
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 8, borderBottomColor: '#78350f',
     shadowColor: '#22c55e', shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 10,
   },
   heroRow: { flexDirection: 'row', alignItems: 'center' },
@@ -327,12 +366,12 @@ const styles = StyleSheet.create({
   podRow: { flexDirection: 'row', gap: 8 },
   pod: {
     flex: 1,
-    backgroundColor: '#0e1726',
-    borderRadius: 14,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 10,
     alignItems: 'center',
-    borderWidth: 1, borderColor: '#1f2937',
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 7, borderBottomColor: '#0f172a',
   },
   podIconWrap: {
     width: 38, height: 38, borderRadius: 19,
@@ -345,10 +384,10 @@ const styles = StyleSheet.create({
 
   // Summary
   summaryCard: {
-    backgroundColor: '#0e1726',
-    borderRadius: 16,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderRadius: 18,
     padding: 14,
-    borderWidth: 1, borderColor: '#1f2937',
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 7, borderBottomColor: '#0f172a',
   },
   sectionTitle: { color: '#94a3b8', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
@@ -356,12 +395,13 @@ const styles = StyleSheet.create({
   summaryValue: { color: '#fff', fontSize: 16, fontWeight: '900' },
   summaryDiv: { height: 1, backgroundColor: '#1f2937' },
 
-  bigSection: { color: '#22c55e', fontSize: 16, fontWeight: '900', marginTop: 10, marginBottom: 4 },
+  bigSection: { color: '#fff', fontSize: 14, fontWeight: '900', marginTop: 14, marginBottom: 6, letterSpacing: 1.5,
+    textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
   card: {
-    backgroundColor: '#0e1726',
-    borderRadius: 16,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderRadius: 18,
     padding: 14,
-    borderWidth: 1, borderColor: '#1f2937',
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 7, borderBottomColor: '#0f172a',
   },
   emptyText: { color: '#64748b', fontSize: 13, textAlign: 'center', paddingVertical: 20 },
 
@@ -390,9 +430,9 @@ const styles = StyleSheet.create({
 
   // Category
   catCard: {
-    backgroundColor: '#0e1726',
-    borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: '#1f2937',
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderRadius: 16, padding: 14,
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 7, borderBottomColor: '#0f172a',
   },
   catTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   catName: { color: '#fff', fontWeight: '900', fontSize: 14, flex: 1 },

@@ -1,11 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, ImageBackground,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const BG = require('../../home_design/home_bg.jpeg');
 import { useFocusEffect } from '@react-navigation/native';
 import { loadStats, getLevelWords } from '../utils/storage';
 import { useTheme } from '../utils/theme';
+import { usePlan, isLevelUnlocked } from '../utils/plan';
 
 const TOTAL_LEVELS = 15;
 
@@ -35,6 +38,7 @@ function colorFor(n, theme) {
 
 export default function LevelsScreen({ navigation }) {
   const theme = useTheme();
+  const { plan, features } = usePlan();
   const [stats, setStats] = useState(null);
 
   useFocusEffect(
@@ -51,9 +55,12 @@ export default function LevelsScreen({ navigation }) {
 
   if (!stats) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: theme.bg }]}>
-        <ActivityIndicator size="large" color={theme.accent} />
-      </SafeAreaView>
+      <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+        <View style={styles.tint} />
+        <SafeAreaView style={styles.center}>
+          <ActivityIndicator size="large" color="#facc15" />
+        </SafeAreaView>
+      </ImageBackground>
     );
   }
 
@@ -63,6 +70,10 @@ export default function LevelsScreen({ navigation }) {
 
   async function startLevel(n) {
     if (n > maxUnlocked) return;
+    if (!isLevelUnlocked(plan, n)) {
+      navigation.navigate('Paywall', { reason: `Levels ${features.maxLevel + 1}-15 are a Pro feature. Unlock the full journey.` });
+      return;
+    }
     // If this level was attempted before, pass cached words so AI just
     // reshuffles them into a new grid (retry logic for Level Mode).
     const cached = await getLevelWords(n);
@@ -89,23 +100,22 @@ export default function LevelsScreen({ navigation }) {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <View style={[styles.blob, { backgroundColor: theme.accent, top: -120, right: -100 }]} />
-      <View style={[styles.blob, { backgroundColor: theme.accent2, bottom: -140, left: -100, opacity: 0.13 }]} />
+    <ImageBackground source={BG} style={styles.container} resizeMode="cover">
+      <View style={styles.tint} />
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <TouchableOpacity style={[styles.back, { borderColor: theme.border }]} onPress={() => navigation.goBack()}>
+            <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
               <Text style={styles.backIcon}>←</Text>
             </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>🏆 LEVELS</Text>
-              <Text style={styles.subtitle}>15 levels — each one designed by the AI</Text>
+            <View style={styles.titlePlate}>
+              <Text style={styles.titlePlateBig}>🏆 LEVELS</Text>
+              <Text style={styles.titlePlateSub}>15 AI-DESIGNED STAGES</Text>
             </View>
           </View>
 
           {/* Progress card */}
-          <View style={[styles.progressCard, { backgroundColor: theme.card, borderColor: theme.accent }]}>
+          <View style={styles.progressCard}>
             <View style={styles.progressTop}>
               <View>
                 <Text style={[styles.progressLabel, { color: theme.accent }]}>UNLOCKED</Text>
@@ -146,7 +156,7 @@ export default function LevelsScreen({ navigation }) {
           <View style={{ height: 30 }} />
         </ScrollView>
       </SafeAreaView>
-    </View>
+    </ImageBackground>
   );
 }
 
@@ -156,7 +166,6 @@ function LevelTile({ n, stats, theme, onPress }) {
   const isCurrent = n === (stats.maxUnlockedLevel || 1) && !isCompleted;
   const cfg = LEVEL_TABLE[n];
   const tierColor = colorFor(n, theme);
-  const borderColor = isCompleted ? theme.gold : isUnlocked ? tierColor : '#1e293b';
   const bestScore = Number((stats.levelHighScores || {})[n]) || 0;
 
   return (
@@ -167,8 +176,9 @@ function LevelTile({ n, stats, theme, onPress }) {
       style={[
         styles.tile,
         {
-          backgroundColor: isUnlocked ? theme.card : '#0a0f1a',
-          borderColor,
+          backgroundColor: isUnlocked ? 'rgba(15,23,42,0.85)' : 'rgba(15,23,42,0.6)',
+          borderColor: isCompleted ? '#fbbf24' : isCurrent ? '#fbbf24' : isUnlocked ? '#fff' : '#334155',
+          borderBottomColor: isCompleted ? '#78350f' : isUnlocked ? '#0f172a' : '#0a0f1a',
           shadowColor: isCompleted ? theme.gold : isUnlocked ? tierColor : 'transparent',
           shadowOpacity: isUnlocked ? 0.45 : 0,
         },
@@ -227,31 +237,53 @@ function LevelTile({ n, stats, theme, onPress }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: 'hidden' },
+  tint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.7)' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   blob: { position: 'absolute', width: 320, height: 320, borderRadius: 160, opacity: 0.15 },
   scroll: { padding: 16, gap: 12 },
 
   header: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 8 },
-  back: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(148,163,184,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  backIcon: { color: '#fff', fontSize: 22 },
-  title: { color: '#fff', fontSize: 24, fontWeight: '900' },
-  subtitle: { color: '#94a3b8', fontSize: 12 },
+  back: {
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: '#3b82f6',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: '#fff', borderBottomWidth: 6, borderBottomColor: '#1e3a8a',
+  },
+  backIcon: { color: '#fff', fontSize: 20, fontWeight: '900' },
+  titlePlate: {
+    flex: 1,
+    backgroundColor: '#92400e',
+    paddingHorizontal: 18, paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 7, borderBottomColor: '#451a03',
+    alignItems: 'center',
+  },
+  titlePlateBig: { color: '#fff', fontSize: 18, fontWeight: '900' },
+  titlePlateSub: { color: '#fde68a', fontSize: 9, fontWeight: '900', letterSpacing: 2, marginTop: -2 },
+  title: { color: '#fff', fontSize: 24, fontWeight: '900',
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
+  subtitle: { color: '#cbd5e1', fontSize: 12, fontWeight: '700' },
 
   progressCard: {
-    borderWidth: 1, borderRadius: 18, padding: 16,
+    borderRadius: 20, padding: 16,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 8, borderBottomColor: '#78350f',
     shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 8,
   },
   progressTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   progressLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
   progressValue: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 2 },
-  progressTrack: { height: 8, backgroundColor: '#0f172a', borderRadius: 4, overflow: 'hidden' },
-  progressFill: { height: 8, borderRadius: 4 },
-  progressHint: { color: '#94a3b8', fontSize: 11, marginTop: 4 },
+  progressTrack: { height: 10, backgroundColor: '#0f172a', borderRadius: 5, overflow: 'hidden', borderWidth: 1, borderColor: '#475569' },
+  progressFill: { height: '100%', borderRadius: 4 },
+  progressHint: { color: '#cbd5e1', fontSize: 11, marginTop: 6, fontWeight: '700' },
 
   flatGrid: { gap: 12, marginTop: 6 },
   gridRow: { flexDirection: 'row', gap: 12 },
   tile: {
-    flex: 1, aspectRatio: 1, borderWidth: 1.5, borderRadius: 20,
+    flex: 1, aspectRatio: 1, borderWidth: 3, borderRadius: 20,
+    borderBottomWidth: 8,
     alignItems: 'center', justifyContent: 'center',
     paddingTop: 10, paddingBottom: 8,
     shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 8,

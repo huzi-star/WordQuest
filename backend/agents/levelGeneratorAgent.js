@@ -158,7 +158,16 @@ async function levelGeneratorAgent({
   reshuffleCategory = '',
   reshuffleEmoji = '',
   reshuffleFunFact = '',
+  tier = null, // bronze/silver/gold/platinum/diamond/elite/master — shapes word style
 }) {
+  const TIERS = require('../config/tiers');
+  const tierObj = tier ? TIERS.TIERS.find((t) => t.key === tier) : null;
+  // When a tier is set, OVERRIDE caller-supplied grid/word count/length with
+  // the tier's mandated puzzle configuration. The tier is the source of truth.
+  if (tierObj?.puzzle) {
+    gridSize = tierObj.puzzle.gridSize;
+    wordCount = tierObj.puzzle.wordCount;
+  }
   const aiReady = isConfigured();
 
   // RESHUFFLE FAST-PATH — used by Level Mode retries.
@@ -180,11 +189,17 @@ async function levelGeneratorAgent({
       reshuffled: true,
     };
   }
-  // Per-word length window. Critically — capped by grid size so small grids
-  // (Level 1 = 3×3) get short words, not 6-letter words that all get filtered.
-  const tierMax = difficulty === 'easy' ? 6 : difficulty === 'medium' ? 8 : 10;
-  const maxLen = Math.min(tierMax, gridSize);
-  const minLen = gridSize <= 3 ? 2 : gridSize <= 4 ? 2 : 3;
+  // Per-word length window. Tier puzzle config wins if present, else fall
+  // back to legacy difficulty-based bounds.
+  let maxLen, minLen;
+  if (tierObj?.puzzle) {
+    maxLen = Math.min(tierObj.puzzle.maxLen, gridSize);
+    minLen = Math.min(tierObj.puzzle.minLen, maxLen);
+  } else {
+    const tierMax = difficulty === 'easy' ? 6 : difficulty === 'medium' ? 8 : 10;
+    maxLen = Math.min(tierMax, gridSize);
+    minLen = gridSize <= 3 ? 2 : gridSize <= 4 ? 2 : 3;
+  }
   const langInstruction = language === 'urdu'
     ? 'Write the funFact in Roman Urdu mixed with English (Pakistani conversational style), max 25 words.'
     : 'Write the funFact in clear, friendly English, max 25 words.';
@@ -193,20 +208,32 @@ async function levelGeneratorAgent({
     ? `Level ${levelNumber} of 15. Lower numbers = familiar/common categories, higher numbers = exotic/rare.`
     : (dailySeed ? `Daily challenge for ${dailySeed}. Make it culturally rich and surprising.` : 'Pick any interesting world-wide category.');
 
+  // When a tier is provided, prefer words matching that tier's difficulty
+  // so the puzzle vocabulary scales with the player's progress.
+  const tierHint = tierObj
+    ? `Player tier: ${tierObj.name}. Word style for this tier: ${tierObj.wordStyle}. Keep words age-appropriate for children under 13.`
+    : '';
+
   let aiResult = null;
 
   if (aiReady) {
+    const NEUTRAL_CATS = TIERS.CATEGORIES.join(', ');
     const prompts = [
       // Attempt 1: full instructions
-      `You are a creative word-search puzzle designer. Pick any thematic category — Pakistani, Indian, world, sport, science, history, mythology, food, art — anything that suits a fun word-search game.
+      `You are a creative word-search puzzle designer for an international English learning game for children aged 6 to 13.
+
+Pick ONE category from this country-neutral list ONLY (no Pakistan/India/region specific themes):
+${NEUTRAL_CATS}.
 
 Constraints:
 - Avoid category: ${lastCategory || 'none'}
 - Difficulty: ${difficulty}
 - ${themeHint}
+${tierHint ? `- ${tierHint}` : ''}
 - Exactly ${wordCount} words, all UPPERCASE A-Z only, no spaces or punctuation, all unique.
+- Every word must be simple enough for a class 5 student (age 10) to read.
 - Each word must be between ${minLen} and ${maxLen} letters (HARD LIMIT — every word must fit in a ${gridSize}×${gridSize} grid).
-- ${langInstruction}
+- Write the funFact in clear simple English (max 25 words). NEVER use Urdu, Hindi, or any non-English language.
 
 Return ONLY this JSON (no markdown, no commentary):
 {"category":"...","categoryEmoji":"...","words":["...","..."],"funFact":"..."}`,
