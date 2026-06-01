@@ -4,7 +4,7 @@ import axios from 'axios';
 
 export const BASE_URL = 'https://backend-liart-three-60.vercel.app';
 
-const client = axios.create({ baseURL: BASE_URL, timeout: 25000 });
+export const client = axios.create({ baseURL: BASE_URL, timeout: 25000 });
 // Long-running endpoints (quiz/coach) get a separate longer-timeout client.
 const slowClient = axios.create({ baseURL: BASE_URL, timeout: 75000 });
 

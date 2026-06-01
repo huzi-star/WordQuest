@@ -10,6 +10,7 @@ import { generateQuiz } from '../utils/api';
 import {
   loadStats, rememberQuizTopic, rememberQuizQuestions, markQuizAttempt,
 } from '../utils/storage';
+import { trace } from '../utils/trace';
 import { Easing } from 'react-native';
 
 const BG = require('../../home_design/home_bg.jpeg');
@@ -221,6 +222,9 @@ export default function QuizScreen({ navigation }) {
     // immediate Supabase sync inside pickOption(), so finishQuiz only
     // needs to record the cooldown attempt timestamp.
     await markQuizAttempt();
+    trace('quiz-session', `finished ${correctCount}/${quiz.questions.length}`, {
+      correct: correctCount, total: quiz.questions.length, score: correctCount * POINTS_PER_CORRECT,
+    });
   }
 
   async function pickOption(i) {
@@ -230,9 +234,11 @@ export default function QuizScreen({ navigation }) {
       tickRef.current = null;
     }
     setPicked(i);
-    if (i === quiz.questions[idx].correctIndex) {
+    const q = quiz.questions[idx];
+    if (i === q.correctIndex) {
       setScore((s) => s + POINTS_PER_CORRECT);
       setCorrectCount((c) => c + 1);
+      trace('quiz-correct', q.question?.slice(0, 60) || `q${idx+1}`, { qIndex: idx, gained: POINTS_PER_CORRECT });
       // Persist these 2 points IMMEDIATELY:
       //   a. totalScoreEver (drives tier progression)
       //   b. highScore (auto-bumped if total exceeds it)
@@ -269,6 +275,8 @@ export default function QuizScreen({ navigation }) {
           }
         }
       } catch (_) {}
+    } else {
+      trace('quiz-wrong', q.question?.slice(0, 60) || `q${idx+1}`, { qIndex: idx, picked: i, correct: q.correctIndex });
     }
   }
   function next() {

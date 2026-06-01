@@ -5,6 +5,7 @@ import { useAuth } from '../utils/auth';
 import { loadStats } from '../utils/storage';
 import { tierForScore, TIERS } from '../utils/tiers';
 import { battleJoinQueue, battleCancelQueue, battleGetMatch } from '../utils/api';
+import { trace } from '../utils/trace';
 import TierBadge from '../components/TierBadge';
 import { playSfx } from '../utils/sound';
 
@@ -72,6 +73,7 @@ export default function BattleQueueScreen({ navigation }) {
 
   function gotoMatch(matchId) {
     playSfx('battle_match', { volume: 0.9 });
+    trace('battle-queue', `matched · ${String(matchId).slice(0,8)}…`, { matchId }, { userId: user?.id });
     navigation.replace('Battle', { matchId });
   }
 

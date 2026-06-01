@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Speech from 'expo-speech';
 import { useAuth } from '../utils/auth';
 import { learnGetLesson, learnSubmitAnswer, learnCompleteUnit } from '../utils/api';
+import { trace } from '../utils/trace';
 import Confetti from '../components/Confetti';
 
 const BG = require('../../home_design/home_bg.jpeg');
@@ -53,9 +54,15 @@ export default function LessonScreen({ route, navigation }) {
       userId: user?.id, unitId, lessonIndex,
       lessonType: lesson?.type, correct: correctCount > 0,
     });
+    trace('learn-lesson', `unit ${unitId} · lesson ${lessonIndex + 1}/${TOTAL_LESSONS}`, {
+      unitId, lessonIndex, lessonType: lesson?.type, correctCount,
+    }, { userId: user?.id });
     if (lessonIndex + 1 >= TOTAL_LESSONS) {
       // unit complete
       const r = await learnCompleteUnit({ userId: user?.id, unitId, score: unitScore + correctCount });
+      trace('learn-unit', `unit ${unitId} complete`, {
+        unitId, totalScore: unitScore + correctCount, xpGained: r?.xpGained, nextUnitId: r?.nextUnitId,
+      }, { userId: user?.id });
       setNextUnitInfo(r);
       setUnitDone(true);
     } else {

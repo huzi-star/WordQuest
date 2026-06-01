@@ -8,6 +8,7 @@ import { useTheme } from '../utils/theme';
 import { resetStats } from '../utils/storage';
 import { useAuth } from '../utils/auth';
 import { signOut, deleteUserStats } from '../utils/supabase';
+import { trace } from '../utils/trace';
 import { CommonActions } from '@react-navigation/native';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -98,6 +99,7 @@ export default function SettingsScreen({ navigation }) {
                 <View style={styles.divider} />
                 <TouchableOpacity
                   onPress={async () => {
+                    trace('auth', 'sign-out', {}, { userId: user?.id });
                     await signOut();
                     navigation.dispatch(
                       CommonActions.reset({ index: 0, routes: [{ name: 'Auth' }] }),

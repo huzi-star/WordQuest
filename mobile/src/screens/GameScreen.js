@@ -16,6 +16,7 @@ import { validateWord, explainWord } from '../utils/api';
 import { initSound, playSfx, playBgm, stopBgm } from '../utils/sound';
 import { usePlan } from '../utils/plan';
 import { useSettings } from '../utils/settings';
+import { trace } from '../utils/trace';
 import { useTheme } from '../utils/theme';
 
 // Local commentary templates — INSTANT, no network round-trip. Backend
@@ -363,6 +364,7 @@ export default function GameScreen({ navigation, route }) {
       // highScore + leaderboard IMMEDIATELY (instead of waiting for round
       // complete). Non-daily rounds still aggregate at round end.
       if (isDaily) {
+        trace('daily-word', wordAttempt, { points: dailyPointsPerWord });
         (async () => {
           try {
             // eslint-disable-next-line global-require

@@ -5,6 +5,7 @@ import TierBadge from '../components/TierBadge';
 import { TIERS, nextTier } from '../utils/tiers';
 import { playSfx } from '../utils/sound';
 import { markTierSeen } from '../utils/storage';
+import { trace } from '../utils/trace';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -130,6 +131,8 @@ export default function TierUpScreen({ route, navigation }) {
   async function handleContinue() {
     // Mark this tier as celebrated so we don't re-show on the next return.
     try { await markTierSeen(to.key); } catch (_) {}
+    // Trace this milestone so /dashboard shows tier promotions in real time.
+    trace('tier-up', `${fromKey} → ${toKey}`, { fromTier: fromKey, toTier: toKey });
     // Push to Supabase immediately so a syncDown can never overwrite the
     // flag back to a lower tier (which would re-trigger the celebration
     // every time the player returns to Home).

@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings } from '../utils/settings';
 import { signUp, signIn, getCurrentUser, fetchStats } from '../utils/supabase';
+import { trace } from '../utils/trace';
 import { CommonActions } from '@react-navigation/native';
 
 const BG = require('../../home_design/home_bg.jpeg');
@@ -83,9 +84,11 @@ export default function AuthScreen({ navigation, route }) {
     }
     setBusy(false);
     if (res?.error) {
+      trace('auth', `${mode} failed`, { email, error: res.error }, { status: 'error' });
       Alert.alert(mode === 'signup' ? 'Sign-up failed' : 'Login failed', res.error);
       return;
     }
+    trace('auth', mode === 'signup' ? 'sign-up' : 'sign-in', { email }, { userId: res?.user?.id });
     // eslint-disable-next-line global-require
     const { loadStats } = require('../utils/storage');
     await new Promise((r) => setTimeout(r, 250));

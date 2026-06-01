@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { upgradePlan, startTrial, applyCoupon } from '../utils/api';
 import { useAuth } from '../utils/auth';
 import { usePlan } from '../utils/plan';
+import { trace } from '../utils/trace';
 
 const BG = require('../../home_design/home_bg.jpeg');
 
@@ -106,6 +107,10 @@ export default function PaywallScreen({ navigation, route }) {
   const [cycle, setCycle] = useState('monthly');
   const [busy, setBusy] = useState(null);
 
+  useEffect(() => {
+    if (reason) trace('paywall-hit', reason, {}, { userId: user?.id });
+  }, []);
+
   async function pickPlan(key) {
     if (key === 'free' || !user?.id) { navigation.goBack(); return; }
     setBusy(key);
@@ -113,9 +118,11 @@ export default function PaywallScreen({ navigation, route }) {
     setBusy(null);
     if (r?.ok) {
       await refresh();
+      trace('subscription', `upgrade → ${key} (${cycle})`, { plan: key, cycle }, { userId: user?.id });
       Alert.alert('🎉 Welcome to ' + (key === 'pro' ? 'Pro' : 'Pro Max') + '!', 'All premium features are now unlocked.');
       navigation.goBack();
     } else {
+      trace('subscription', `upgrade failed → ${key}`, { plan: key, error: r?.error }, { userId: user?.id, status: 'error' });
       Alert.alert('Payment failed', r?.error || 'Try again in a moment.');
     }
   }
@@ -127,6 +134,7 @@ export default function PaywallScreen({ navigation, route }) {
     setBusy(null);
     if (r?.ok) {
       await refresh();
+      trace('subscription', `coupon → ${planKey}`, { plan: planKey, coupon: code }, { userId: user?.id });
       Alert.alert('🎁 Coupon applied!', `${planKey === 'pro' ? 'Pro' : 'Pro Max'} activated for 7 days.`);
       navigation.goBack();
     } else {
@@ -141,6 +149,7 @@ export default function PaywallScreen({ navigation, route }) {
     setBusy(null);
     if (r?.ok) {
       await refresh();
+      trace('subscription', 'trial-started (Pro 7-day)', { plan: 'pro', trial: true }, { userId: user?.id });
       Alert.alert('✨ 7-day Pro trial started!', 'Enjoy all Pro features free for a week.');
       navigation.goBack();
     } else {

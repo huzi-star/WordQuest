@@ -18,6 +18,8 @@ polished cartoonish 3D style.
 | 📱 Latest APK (v3.8.0) | https://expo.dev/artifacts/eas/85gHn8ZeWBrEGhCBQjxk72.apk |
 | 💻 GitHub | https://github.com/huzi-star/WordQuest |
 | 🌐 Backend (live) | https://backend-liart-three-60.vercel.app |
+| 🧠 Agent traces | https://backend-liart-three-60.vercel.app/logs |
+| 📡 Game dashboard | https://backend-liart-three-60.vercel.app/dashboard |
 | 🗄 Supabase project | https://supabase.com/dashboard/project/epjndqbazobrfhovhpza |
 
 ---
@@ -146,6 +148,21 @@ Supabase so the same lesson is identical across devices.
   public leaderboard, `avatars` storage bucket for photo uploads.
 - **1v1 Battle MMR** — Elo rating with K = 32, queue matches players within
   the same tier band.
+
+---
+
+## 📡 Live observability
+
+Two trace consoles are mounted on the backend:
+
+| Route | What it shows |
+|---|---|
+| `/logs` | Every AI agent run — prompt, response, latency, token usage, status. Filter by agent + status + range. |
+| `/dashboard` | Game-wide events grouped by category — tier-ups, quiz answers, daily words, battle results, subscriptions, lessons, avatars, auth, paywall hits. 9 tabbed views + per-category counts. |
+
+Mobile fires events via `src/utils/trace.js` (`POST /api/event`) — fire-and-forget,
+never blocks gameplay. Backend AI agents log automatically through `utils/logger.js`.
+Both surfaces read from the same Supabase `agent_logs` table and refresh every 2–3 s.
 
 ---
 

@@ -9,6 +9,7 @@ const BG = require('../../home_design/home_bg.jpeg');
 import { roundComplete } from '../utils/api';
 import { saveStats, logRound, completeLevel, markDailyAttempt, recordLevelScore, loadStats } from '../utils/storage';
 import { tierUpDelta } from '../utils/tiers';
+import { trace } from '../utils/trace';
 import { useSettings } from '../utils/settings';
 import { useAuth } from '../utils/auth';
 import Confetti from '../components/Confetti';
@@ -95,6 +96,19 @@ export default function RoundCompleteScreen({ navigation, route }) {
       // Daily challenge: always mark as attempted (locks for 12 h).
       if (roundResult.isDaily) {
         await markDailyAttempt();
+        trace('daily-result', isDailyFail ? 'failed' : 'completed', {
+          wordsFound: roundResult.wordsFound, total: roundResult.totalWords,
+          score: isDailyFail ? 0 : (roundResult.roundScore || 0),
+        });
+      }
+      // Numbered Level Mode result.
+      if (roundResult.levelNumber > 0) {
+        trace('level-complete', `level ${roundResult.levelNumber}`, {
+          levelNumber: roundResult.levelNumber,
+          wordsFound: roundResult.wordsFound, total: roundResult.totalWords,
+          passed: roundResult.wordsFound === roundResult.totalWords,
+          score: roundResult.roundScore,
+        });
       }
       // Detect tier-up: logRound has just updated totalScoreEver, so read
       // the fresh value and compare against lastSeenTier.

@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSettings } from '../utils/settings';
 import { useAuth } from '../utils/auth';
 import { uploadAvatarPhoto } from '../utils/supabase';
+import { trace } from '../utils/trace';
 
 const BG = require('../../home_design/home_bg.jpeg');
 
@@ -51,10 +52,12 @@ export default function AvatarScreen({ navigation }) {
         setPhotoUrl(result.publicUrl);
         // Persist immediately so Home / Leaderboard pick it up on next focus.
         setSetting('avatarUrl', result.publicUrl);
+        trace('avatar-upload', 'photo uploaded', { url: result.publicUrl }, { userId: user?.id });
         Alert.alert('✅ Avatar saved!', 'Your new photo is now showing across the app.');
       } else {
         // Revert preview on failure.
         setPhotoUrl(settings.avatarUrl || null);
+        trace('avatar-upload', 'photo upload failed', { error: result?.error }, { userId: user?.id, status: 'error' });
         const reason = result?.error || 'Unknown error.';
         const isMissingBucket = /bucket|not found|does not exist/i.test(reason);
         Alert.alert(

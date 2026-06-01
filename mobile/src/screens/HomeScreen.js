@@ -16,6 +16,7 @@ let HOME_TIERUP_SHOWN = false;
 import { fetchWordOfDay, learnGetPath } from '../utils/api';
 import { usePlan, canUseDaily } from '../utils/plan';
 import { useSettings } from '../utils/settings';
+import { trace } from '../utils/trace';
 
 const BG = require('../../home_design/home_bg.jpeg');
 const ICO_TROPHY = require('../../home_design/tropy.png');
@@ -147,6 +148,7 @@ export default function HomeScreen({ navigation }) {
       return;
     }
     bump('quick_play');
+    trace('quick-play', 'started', { tier: tierForScore(stats.totalScoreEver || 0).key }, { userId: user?.id });
     const resumed = stats.lastAdaptiveStats || {
       roundsPlayed: 0, avgWordsFound: 0, avgTimeLeft: 0, currentStreak: 0, lastCategory: '',
     };

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../utils/auth';
 import { battleGetMatch } from '../utils/api';
+import { trace } from '../utils/trace';
 import Confetti from '../components/Confetti';
 
 const BG = require('../../home_design/home_bg.jpeg');
@@ -21,7 +22,16 @@ export default function BattleResultScreen({ route, navigation }) {
       // Poll until status=done.
       for (let i = 0; i < 30 && !cancelled; i++) {
         const r = await battleGetMatch(matchId);
-        if (r?.ok && r.match?.status === 'done') { setMatch(r.match); break; }
+        if (r?.ok && r.match?.status === 'done') {
+          setMatch(r.match);
+          // Trace the final outcome so /dashboard's Battle tab shows wins/losses.
+          const winner = r.match?.winnerUserId;
+          const outcome = !winner ? 'draw' : winner === user?.id ? 'win' : 'loss';
+          trace('battle-result', `${outcome} · match ${String(matchId).slice(0,8)}…`, {
+            matchId, outcome, winnerUserId: winner,
+          }, { userId: user?.id });
+          break;
+        }
         if (r?.ok) setMatch(r.match);
         await new Promise((res) => setTimeout(res, 1500));
       }

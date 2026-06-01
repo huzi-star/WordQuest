@@ -36,6 +36,11 @@ app.get('/api/health', (req, res) => {
 // Agent observability — Supabase-backed trace console + JSON API
 app.use(require('./routes/logsDashboard'));
 
+// Game-wide event ingest (mobile POSTs every meaningful action here) +
+// the new tabbed Game Trace Dashboard at /dashboard.
+app.use(require('./routes/eventApi'));
+app.use(require('./routes/gameDashboard'));
+
 // WordQuest Kids — vocabulary tier game (new product, /api/kids/*)
 app.use(require('./routes/kidsApi'));
 
