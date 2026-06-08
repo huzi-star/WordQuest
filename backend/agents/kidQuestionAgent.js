@@ -5,6 +5,7 @@
 
 const { generate, isConfigured } = require('../utils/llm');
 const { getTier } = require('../config/tiers');
+const { guardText, guardArray } = require('../utils/guardrailRunner');
 
 function shuffle(arr) {
   const a = arr.slice();
@@ -111,27 +112,40 @@ async function kidQuestionAgent({ card, type, otherWords = [] } = {}) {
   // backstop — never return fewer than 3 distractors
   while (distractors.length < 3) distractors.push('—');
 
-  const optionsRaw = [correct, ...distractors.slice(0, 3)];
+  // SAFETY GUARDRAIL — every option (correct + distractors) and the
+  // explanation must pass child-safety. If the correct answer itself
+  // fails we drop the whole question (caller will retry / fall back).
+  const allow = [String(card.word || '').toUpperCase()];
+  const safePrompt = await guardText(prompt, 'tutor', { ageGroup: 'kid', allowList: allow });
+  if (safePrompt === null) return null;
+  const safeCorrect = await guardText(String(correct), 'tutor', { ageGroup: 'kid', allowList: allow });
+  if (safeCorrect === null) return null;
+  const safeDistractors = await guardArray(distractors.slice(0, 3).map(String), 'tutor', { ageGroup: 'kid', allowList: allow });
+  while (safeDistractors.length < 3) safeDistractors.push('—');
+
+  const optionsRaw = [safeCorrect, ...safeDistractors.slice(0, 3)];
   const options = shuffle(optionsRaw).map((text, i) => ({
     id: String.fromCharCode(65 + i), // A, B, C, D
     text: String(text),
   }));
-  const correctId = options.find((o) => o.text === String(correct))?.id || 'A';
+  const correctId = options.find((o) => o.text === String(safeCorrect))?.id || 'A';
+  const explanation =
+    type === 'meaning'
+      ? `${capitalize(card.word)} means: ${card.meaning}`
+      : type === 'synonym'
+      ? `${capitalize(card.synonym)} means the same as ${card.word}.`
+      : type === 'antonym'
+      ? `${capitalize(card.antonym)} is the opposite of ${card.word}.`
+      : `The sentence was: "${card.example}"`;
+  const safeExplain = await guardText(explanation, 'tutor', { ageGroup: 'kid', allowList: allow });
 
   return {
     type,
     word: card.word,
-    prompt,
+    prompt: safePrompt,
     options,
     correctId,
-    explanation:
-      type === 'meaning'
-        ? `${capitalize(card.word)} means: ${card.meaning}`
-        : type === 'synonym'
-        ? `${capitalize(card.synonym)} means the same as ${card.word}.`
-        : type === 'antonym'
-        ? `${capitalize(card.antonym)} is the opposite of ${card.word}.`
-        : `The sentence was: "${card.example}"`,
+    explanation: safeExplain || '',
     usageTip: card.usage_tip || null,
   };
 }

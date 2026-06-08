@@ -58,10 +58,40 @@ async function generate(prompt, opts = {}) {
         durationMs: Date.now() - startedAt,
         error: 'Empty response',
         prompt: prompt.slice(0, 600),
+        meta: {
+          tool: 'OpenAI · gpt-4o-mini',
+          decision: 'EMPTY response — agent will fall back',
+          reason: 'OpenAI returned no content for this request.',
+          fallback: true,
+        },
       });
       throw new Error('Empty response from OpenAI');
     }
 
+    // Auto-synthesize a DECISION + CONFIDENCE/REASON summary so EVERY
+    // LLM-backed agent surfaces a non-empty value in the admin trace
+    // dropdown — even when the agent itself hasn't wrapped its call
+    // with explicit meta. Callers can override either by passing
+    // opts.deriveMeta(text) → { decision, reason }.
+    let decision = null;
+    let reason = null;
+    try {
+      if (typeof opts.deriveMeta === 'function') {
+        const m = opts.deriveMeta(text) || {};
+        decision = m.decision || null;
+        reason = m.reason || null;
+      }
+    } catch (_) { /* never block the agent on summarization failure */ }
+    if (!decision) {
+      // Fallback: a short single-line preview of the AI output. Works
+      // for free-form prose AND JSON (just grabs the first meaningful
+      // characters either way).
+      const oneLine = String(text).replace(/\s+/g, ' ').trim().slice(0, 120);
+      decision = oneLine || `${agent} responded ok`;
+    }
+    if (!reason) {
+      reason = `gpt-4o-mini · temp=${temperature} · ${usage.total_tokens || 0} tok · ${Date.now() - startedAt}ms`;
+    }
     logger.push({
       agent, model: body.model, status: 'ok',
       durationMs: Date.now() - startedAt,
@@ -72,6 +102,7 @@ async function generate(prompt, opts = {}) {
       },
       prompt: prompt.slice(0, 600),
       response: text.slice(0, 600),
+      meta: { tool: 'OpenAI · gpt-4o-mini', decision, reason, fallback: false },
     });
     return text.trim();
   } catch (err) {
@@ -80,6 +111,12 @@ async function generate(prompt, opts = {}) {
       durationMs: Date.now() - startedAt,
       error: err.message || String(err),
       prompt: prompt.slice(0, 600),
+      meta: {
+        tool: 'OpenAI · gpt-4o-mini',
+        decision: `ERROR — ${String(err.message || err).slice(0, 80)}`,
+        reason: 'LLM call failed; agent will use its fallback path.',
+        fallback: true,
+      },
     });
     throw err;
   }

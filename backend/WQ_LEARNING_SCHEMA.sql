@@ -8,8 +8,16 @@ create table if not exists public.wq_learn_progress (
   completed_units integer[] not null default '{}',
   total_xp integer not null default 0,
   last_lesson_at timestamptz,
-  weak_concepts text[] not null default '{}'
+  weak_concepts text[] not null default '{}',
+  -- Per-unit memory: { "1": { last10:[{lessonType,words,passed,...}], lastDifficulty }, "2": {...} }.
+  -- Powers per-user adaptive difficulty (hidden from frontend) and no-repeat
+  -- vocabulary for Continue Learning. Each unit is independent.
+  unit_memory jsonb not null default '{}'::jsonb
 );
+
+-- Migration for existing deployments: add the column if it doesn't exist yet.
+alter table public.wq_learn_progress
+  add column if not exists unit_memory jsonb not null default '{}'::jsonb;
 
 -- Per-lesson attempts (for adaptive review + parent reports).
 create table if not exists public.wq_learn_attempts (

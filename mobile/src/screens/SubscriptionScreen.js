@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ImageBackground, Alert, ScrollView,
+  View, Text, StyleSheet, TouchableOpacity, ImageBackground, Alert,
 } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../utils/auth';
 import { usePlan } from '../utils/plan';
@@ -36,9 +37,17 @@ export default function SubscriptionScreen({ navigation }) {
 
   return (
     <ImageBackground source={BG} style={styles.bg} resizeMode="cover">
-      <View style={styles.tint} />
+      <View style={styles.tint} pointerEvents="none" />
       <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          scrollEnabled
+          nestedScrollEnabled
+          bounces
+          overScrollMode="always"
+        >
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
               <Text style={styles.backTxt}>← Back</Text>
@@ -56,8 +65,6 @@ export default function SubscriptionScreen({ navigation }) {
           <Text style={styles.section}>TODAY'S USAGE</Text>
           <View style={styles.usageCard}>
             <UsageRow label="Quick Play" used={usage.quick_play} cap={features.qpPerDay} />
-            <UsageRow label="Quiz" used={usage.quiz} cap={features.quizPerDay} />
-            <UsageRow label="Daily Challenge" used={usage.daily} cap={features.dailyPerDay} />
           </View>
 
           <Text style={styles.section}>FEATURES</Text>

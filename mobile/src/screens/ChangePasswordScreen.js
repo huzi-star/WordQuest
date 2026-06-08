@@ -144,7 +144,7 @@ export default function ChangePasswordScreen({ navigation }) {
                 {busy ? (
                   <ActivityIndicator color={theme.bg} />
                 ) : (
-                  <Text style={[styles.submitText, { color: theme.bg }]}>Update Password →</Text>
+                  <Text style={[styles.submitText, { color: theme.bg }]}>Update Password</Text>
                 )}
               </TouchableOpacity>
             </View>

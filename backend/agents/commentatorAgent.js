@@ -2,6 +2,7 @@
 // Templated fallback so the player always sees a milestone line.
 
 const { generate, isConfigured } = require('../utils/llm');
+const { guardText } = require('../utils/guardrailRunner');
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function render(tpl, vars) {
@@ -70,7 +71,8 @@ Return ONE short line (max 15 words). ${langInstruction} No quotes, no labels.`;
     });
     const cleaned = text.trim().replace(/^["']|["']$/g, '');
     if (!cleaned || cleaned.length > 160) return { comment: fallback };
-    return { comment: cleaned };
+    const safe = await guardText(cleaned, 'message', { ageGroup: 'kid' });
+    return { comment: safe || fallback };
   } catch (err) {
     return { comment: fallback };
   }

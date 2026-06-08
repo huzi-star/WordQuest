@@ -8,6 +8,8 @@ import { useSettings } from '../utils/settings';
 import { signUp, signIn, getCurrentUser, fetchStats } from '../utils/supabase';
 import { trace } from '../utils/trace';
 import { CommonActions } from '@react-navigation/native';
+import AppLogo from '../components/AppLogo';
+import { rfs } from '../utils/responsive';
 
 const BG = require('../../home_design/home_bg.jpeg');
 const APP_LOGO = require('../../app-logo.jpeg');
@@ -139,16 +141,12 @@ export default function AuthScreen({ navigation, route }) {
           >
             {/* HERO: logo + wooden plaque + title */}
             <Animated.View style={[styles.heroWrap, { opacity: fadeIn, transform: [{ scale: logoScale }] }]}>
-              <View style={styles.logoRing}>
-                <View style={styles.logoInner}>
-                  <Image source={APP_LOGO} style={styles.logoImg} />
-                </View>
-              </View>
+              <AppLogo size={120} />
               <View style={styles.titlePlate}>
                 <Text style={styles.titlePlateText}>WordQuest</Text>
                 <Text style={styles.titlePlateSub}>BUILD YOUR MIND</Text>
               </View>
-              <Text style={styles.brand}>WordQuest</Text>
+              <Text style={styles.brand} numberOfLines={1} adjustsFontSizeToFit>WordQuest</Text>
               <View style={styles.tagPill}>
                 <Text style={styles.tag}>{isSignup ? 'CREATE YOUR ACCOUNT' : 'WELCOME BACK'}</Text>
               </View>
@@ -252,16 +250,13 @@ export default function AuthScreen({ navigation, route }) {
                 {busy ? (
                   <ActivityIndicator color="#14532d" />
                 ) : (
-                  <>
-                    <Text style={styles.submitText}>{isSignup ? 'Create account →' : 'Login →'}</Text>
-                    <View style={styles.submitArrow}><Text style={styles.submitArrowText}>→</Text></View>
-                  </>
+                  <Text style={styles.submitText}>{isSignup ? 'Create account' : 'Login'}</Text>
                 )}
               </TouchableOpacity>
             </View>
 
             <Text style={styles.legal}>
-              Stats sync across devices when logged in.{'\n'}Your password is encrypted by Supabase.
+              Stats sync across devices when logged in. Your password is encrypted by Supabase.
             </Text>
             <View style={{ height: 24 }} />
           </ScrollView>
@@ -305,8 +300,9 @@ const styles = StyleSheet.create({
   titlePlateSub: { color: '#fde68a', fontSize: 9, fontWeight: '900', letterSpacing: 2, marginTop: -2 },
 
   brand: {
-    color: '#bfdbfe', fontSize: 38, fontWeight: '900', marginTop: 8,
+    color: '#bfdbfe', fontSize: rfs(36), fontWeight: '900', marginTop: 12,
     textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4,
+    maxWidth: '92%', textAlign: 'center',
   },
   tagPill: {
     marginTop: 6,

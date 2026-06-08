@@ -1,6 +1,6 @@
 // LessonScreen — renders any lesson type returned by /api/learn/lesson.
-// Sequence: load lesson 0 → user plays → submit → load lesson 1 → ... → after
-// lesson 4 → complete-unit → TierUp / next unit.
+// Sequence: load lesson 0 user plays submit load lesson 1 ... after
+// lesson 4 complete-unit TierUp / next unit.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Speech from 'expo-speech';
 import { useAuth } from '../utils/auth';
-import { learnGetLesson, learnSubmitAnswer, learnCompleteUnit } from '../utils/api';
+import { learnGetLesson, learnSubmitAnswer, learnCompleteUnit, learnLessonResult } from '../utils/api';
 import { trace } from '../utils/trace';
 import Confetti from '../components/Confetti';
 
@@ -34,14 +34,24 @@ export default function LessonScreen({ route, navigation }) {
   const [unitScore, setUnitScore] = useState(0);
   const [unitDone, setUnitDone] = useState(false);
   const [nextUnitInfo, setNextUnitInfo] = useState(null);
+  // Per-lesson retry state: counts attempts at the CURRENT lessonIndex.
+  // Resets to 0 the moment we advance to the next lesson. Used to ask the
+  // backend for fresh wording on a retry.
+  const [attempt, setAttempt] = useState(0);
+  // Fail screen — set after lesson-result returns passed=false. Mobile
+  // refuses to advance until the user retries and passes.
+  const [failInfo, setFailInfo] = useState(null);
+  // Motivational chip from coach/motivation agent (shown briefly after pass).
+  const [motivational, setMotivational] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     setLesson(null);
-    const r = await learnGetLesson({ unitId, i: lessonIndex });
+    setFailInfo(null);
+    const r = await learnGetLesson({ unitId, i: lessonIndex, userId: user?.id || null, attempt });
     if (r?.ok) setLesson(r.lesson);
     setLoading(false);
-  }, [unitId, lessonIndex]);
+  }, [unitId, lessonIndex, attempt, user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -50,25 +60,53 @@ export default function LessonScreen({ route, navigation }) {
   }
 
   async function onLessonDone(correctCount) {
-    await learnSubmitAnswer({
+    const totalItems = (lesson?.items || []).length;
+    // Legacy single-answer log (kept for /dashboard backwards-compat).
+    learnSubmitAnswer({
       userId: user?.id, unitId, lessonIndex,
       lessonType: lesson?.type, correct: correctCount > 0,
+    }).catch(() => {});
+
+    // Pass/fail gate — backend writes to wq_player_memory.learn_units
+    // and decides whether the player may advance.
+    const res = await learnLessonResult({
+      userId: user?.id,
+      unitId, lessonIndex,
+      lessonType: lesson?.type || '',
+      correctCount, totalItems,
+      lessonPayload: lesson,
     });
-    trace('learn-lesson', `unit ${unitId} · lesson ${lessonIndex + 1}/${TOTAL_LESSONS}`, {
-      unitId, lessonIndex, lessonType: lesson?.type, correctCount,
+    trace('learn-lesson', `unit ${unitId} · lesson ${lessonIndex + 1}/${TOTAL_LESSONS} · ${res?.passed ? 'PASS' : 'FAIL'}`, {
+      unitId, lessonIndex, lessonType: lesson?.type, correctCount, totalItems, passed: !!res?.passed, attempt,
     }, { userId: user?.id });
+
+    if (!res?.passed) {
+      // FAIL — show retry screen with kid-safe motivational line.
+      // We do NOT advance lessonIndex; the same lesson must be redone.
+      setFailInfo({
+        correctCount, totalItems,
+        motivational: res?.motivational || 'Almost — try once more, you got this 💪',
+      });
+      return;
+    }
+
+    setMotivational(res?.motivational || '');
     if (lessonIndex + 1 >= TOTAL_LESSONS) {
-      // unit complete
-      const r = await learnCompleteUnit({ userId: user?.id, unitId, score: unitScore + correctCount });
-      trace('learn-unit', `unit ${unitId} complete`, {
-        unitId, totalScore: unitScore + correctCount, xpGained: r?.xpGained, nextUnitId: r?.nextUnitId,
-      }, { userId: user?.id });
-      setNextUnitInfo(r);
+      // All 5 lessons passed unit complete. NO XP / points per spec.
+      const r = await learnCompleteUnit({ userId: user?.id, unitId });
+      trace('learn-unit', `unit ${unitId} complete`, { unitId, nextUnitId: r?.nextUnitId }, { userId: user?.id });
+      setNextUnitInfo({ ...r, motivational: r?.motivational || motivational });
       setUnitDone(true);
     } else {
       setLessonIndex((i) => i + 1);
+      setAttempt(0);
       setUnitScore((s) => s + correctCount);
     }
+  }
+
+  function retryLesson() {
+    setFailInfo(null);
+    setAttempt((a) => a + 1); // backend asks LLM for fresh wording on retry
   }
 
   if (loading) {
@@ -89,11 +127,36 @@ export default function LessonScreen({ route, navigation }) {
     return (
       <UnitCompleteScreen
         unitId={unitId}
-        score={unitScore}
-        xpGained={nextUnitInfo?.xpGained}
         nextUnitId={nextUnitInfo?.nextUnitId}
+        motivational={nextUnitInfo?.motivational || ''}
         navigation={navigation}
       />
+    );
+  }
+
+  if (failInfo) {
+    return (
+      <ImageBackground source={BG} style={styles.bg} resizeMode="cover">
+        <View style={[styles.tealTint, { backgroundColor: 'rgba(80,30,30,0.72)' }]} />
+        <SafeAreaView style={styles.safe}>
+          <View style={styles.center}>
+            <Text style={styles.failEmoji}>🪁</Text>
+            <View style={styles.failPlate}>
+              <Text style={styles.failHead}>Almost there</Text>
+              <Text style={styles.failSub}>You got {failInfo.correctCount} of {failInfo.totalItems}. Pass mark not reached — keep your unit safe by trying once more.</Text>
+            </View>
+            <View style={styles.motivCard}>
+              <Text style={styles.motivText}>{failInfo.motivational}</Text>
+            </View>
+            <TouchableOpacity activeOpacity={0.9} style={styles.cta} onPress={retryLesson}>
+              <Text style={styles.ctaText}>↻ TRY AGAIN</Text>
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.85} style={[styles.cta, styles.btnGhost, { marginTop: 10 }]} onPress={() => navigation.goBack()}>
+              <Text style={[styles.ctaText, { color: '#fff' }]}>Leave for now</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </ImageBackground>
     );
   }
 
@@ -196,7 +259,7 @@ function FlashcardLesson({ lesson, onDone }) {
         {card.example ? <Text style={styles.flashExample}>“{card.example}”</Text> : null}
       </View>
       <TouchableOpacity activeOpacity={0.9} style={styles.cta} onPress={next}>
-        <Text style={styles.ctaText}>{idx + 1 < items.length ? 'Next Card →' : 'Done ✓'}</Text>
+        <Text style={styles.ctaText}>{idx + 1 < items.length ? 'Next Card' : 'Done ✓'}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -258,7 +321,7 @@ function MCQLesson({ lesson, onDone, questionKey }) {
             {String(picked).toLowerCase() === String(correct).toLowerCase() ? '✓ Correct!' : `Correct answer: ${correct}`}
           </Text>
           <TouchableOpacity activeOpacity={0.9} style={styles.cta} onPress={next}>
-            <Text style={styles.ctaText}>{idx + 1 < items.length ? 'Next →' : 'Done ✓'}</Text>
+            <Text style={styles.ctaText}>{idx + 1 < items.length ? 'Next' : 'Done ✓'}</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -316,7 +379,7 @@ function ListenPickLesson({ lesson, onDone }) {
       </View>
       {picked ? (
         <TouchableOpacity activeOpacity={0.9} style={styles.cta} onPress={next}>
-          <Text style={styles.ctaText}>{idx + 1 < items.length ? 'Next →' : 'Done ✓'}</Text>
+          <Text style={styles.ctaText}>{idx + 1 < items.length ? 'Next' : 'Done ✓'}</Text>
         </TouchableOpacity>
       ) : null}
       <Text style={styles.scoreLine}>Score: {score} / {items.length}</Text>
@@ -337,7 +400,7 @@ function MatchPairsLesson({ lesson, onDone }) {
     if (matched.has(i)) return;
     if (!picked.side) { setPicked({ side, idx: i }); return; }
     if (picked.side === side) { setPicked({ side, idx: i }); return; }
-    // Cross-tap → check
+    // Cross-tap check
     const a = picked.idx; const b = i;
     if (a === b) {
       const newMatched = new Set(matched); newMatched.add(a); setMatched(newMatched);
@@ -463,7 +526,7 @@ function SentenceBuildLesson({ lesson, onDone }) {
             {isCorrect ? '✓ Correct!' : `Correct: ${correct.join(' ')}`}
           </Text>
           <TouchableOpacity activeOpacity={0.9} style={styles.cta} onPress={next}>
-            <Text style={styles.ctaText}>{idx + 1 < items.length ? 'Next →' : 'Done ✓'}</Text>
+            <Text style={styles.ctaText}>{idx + 1 < items.length ? 'Next' : 'Done ✓'}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -518,7 +581,7 @@ function ReadingLesson({ lesson, onDone }) {
       })}
       {picked ? (
         <TouchableOpacity activeOpacity={0.9} style={styles.cta} onPress={next}>
-          <Text style={styles.ctaText}>{idx + 1 < items.length ? 'Next →' : 'Done ✓'}</Text>
+          <Text style={styles.ctaText}>{idx + 1 < items.length ? 'Next' : 'Done ✓'}</Text>
         </TouchableOpacity>
       ) : null}
       <Text style={styles.scoreLine}>Score: {score} / {items.length}</Text>
@@ -527,7 +590,9 @@ function ReadingLesson({ lesson, onDone }) {
 }
 
 // -------- Unit complete screen ---------------------------------------------
-function UnitCompleteScreen({ unitId, score, xpGained, nextUnitId, navigation }) {
+// No XP / points / badges (per spec). Pure encouragement — coachAgent's
+// motivational line in the centre, then "Next Unit" to advance.
+function UnitCompleteScreen({ unitId, nextUnitId, motivational, navigation }) {
   const scale = useRef(new Animated.Value(0.5)).current;
   useEffect(() => {
     Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: true }).start();
@@ -542,12 +607,13 @@ function UnitCompleteScreen({ unitId, score, xpGained, nextUnitId, navigation })
           <Animated.Text style={[styles.unitDoneEmoji, { transform: [{ scale }] }]}>🎉</Animated.Text>
           <View style={styles.unitDonePlate}>
             <Text style={styles.unitDoneHead}>Unit {unitId} Complete!</Text>
-            <Text style={styles.unitDoneSub}>WELL DONE</Text>
+            <Text style={styles.unitDoneSub}>NEXT UNIT UNLOCKED</Text>
           </View>
-          <View style={styles.unitDoneCard}>
-            <Text style={styles.unitDoneXp}>+{xpGained || 0} XP earned</Text>
-            <Text style={styles.unitDoneScore}>You scored {score || 0} correct answers</Text>
-          </View>
+          {motivational ? (
+            <View style={styles.motivCard}>
+              <Text style={styles.motivText}>{motivational}</Text>
+            </View>
+          ) : null}
         </View>
         <View style={styles.bottomBtns}>
           <TouchableOpacity activeOpacity={0.9} style={[styles.cta, styles.btnGhost, { flex: 1 }]} onPress={() => navigation.popToTop()}>
@@ -555,7 +621,7 @@ function UnitCompleteScreen({ unitId, score, xpGained, nextUnitId, navigation })
           </TouchableOpacity>
           {nextUnitId && nextUnitId !== unitId ? (
             <TouchableOpacity activeOpacity={0.9} style={[styles.cta, { flex: 1 }]} onPress={() => navigation.replace('Lesson', { unitId: nextUnitId, lessonIndex: 0 })}>
-              <Text style={styles.ctaText}>Next Unit →</Text>
+              <Text style={styles.ctaText}>Next Unit</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -800,4 +866,29 @@ const styles = StyleSheet.create({
   },
   unitDoneScore: { color: '#cbd5e1', marginTop: 6, fontWeight: '700' },
   bottomBtns: { padding: 20, flexDirection: 'row', gap: 12 },
+
+  // Fail / retry surface
+  failEmoji: { fontSize: 76, marginBottom: 6 },
+  failPlate: {
+    backgroundColor: '#7f1d1d',
+    paddingHorizontal: 22, paddingVertical: 14, borderRadius: 22,
+    borderWidth: 3, borderColor: '#fca5a5',
+    borderBottomWidth: 8, borderBottomColor: '#450a0a',
+    alignItems: 'center',
+  },
+  failHead: {
+    color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 3,
+  },
+  failSub: { color: '#fecaca', marginTop: 8, fontSize: 13, textAlign: 'center', fontWeight: '700', lineHeight: 19 },
+
+  // Motivational chip (used on both fail + unit-complete screens).
+  motivCard: {
+    marginTop: 16, alignSelf: 'stretch',
+    backgroundColor: 'rgba(8,47,73,0.85)',
+    borderRadius: 16, padding: 14,
+    borderWidth: 3, borderColor: '#38bdf8',
+    borderBottomWidth: 7, borderBottomColor: '#082f49',
+  },
+  motivText: { color: '#e0f2fe', fontSize: 14, fontWeight: '700', textAlign: 'center', lineHeight: 20 },
 });

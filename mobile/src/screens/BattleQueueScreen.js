@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../utils/auth';
 import { loadStats } from '../utils/storage';
 import { tierForScore, TIERS } from '../utils/tiers';
-import { battleJoinQueue, battleCancelQueue, battleGetMatch } from '../utils/api';
+import { battleJoinQueue, battleCancelQueue, battleGetMatch, battleHeartbeat } from '../utils/api';
 import { trace } from '../utils/trace';
 import TierBadge from '../components/TierBadge';
 import { playSfx } from '../utils/sound';
@@ -20,6 +20,16 @@ export default function BattleQueueScreen({ navigation }) {
   const widenRef = useRef(false);
   const spin = useRef(new Animated.Value(0)).current;
   const cancelledRef = useRef(false);
+  const heartbeatRef = useRef(null);
+
+  // Always halt heartbeat + clear queue when leaving the screen.
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true;
+      if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+      if (user?.id) { try { battleCancelQueue(user.id); } catch (_) {} }
+    };
+  }, []); // eslint-disable-line
 
   useEffect(() => {
     Animated.loop(
@@ -49,6 +59,11 @@ export default function BattleQueueScreen({ navigation }) {
       gotoMatch(r.matchId);
       return;
     }
+    // Start a 2s heartbeat so the server knows we are alive and online.
+    if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+    heartbeatRef.current = setInterval(() => {
+      if (user?.id) battleHeartbeat(user.id);
+    }, 2000);
     // Poll for a match.
     pollForMatch(t.key, displayName, avatarColor);
   }
@@ -56,14 +71,27 @@ export default function BattleQueueScreen({ navigation }) {
   async function pollForMatch(tierKey, displayName, avatarColor) {
     const begin = Date.now();
     while (!cancelledRef.current) {
-      setElapsed(Math.floor((Date.now() - begin) / 1000));
-      // After 8s widen the MMR band to ±400 to speed things up.
+      const seconds = Math.floor((Date.now() - begin) / 1000);
+      setElapsed(seconds);
+      // HARD CAP — never wait longer than 30 seconds. After that, no real
+      // opponent was online; surface the truth and go home (NEVER bot).
+      if (seconds >= 30) {
+        if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+        try { await battleCancelQueue(user.id); } catch (_) {}
+        if (!cancelledRef.current) {
+          cancelledRef.current = true;
+          setError('No real opponent online right now. Please try again in a moment.');
+          setPhase('idle');
+        }
+        return;
+      }
       if (!widenRef.current && Date.now() - begin > 8000) widenRef.current = true;
       const r = await battleJoinQueue({
         userId: user.id, tier: tierKey, displayName, avatarColor, widen: widenRef.current,
       });
       if (cancelledRef.current) return;
       if (r?.ok && r.status === 'matched' && r.matchId) {
+        if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
         gotoMatch(r.matchId);
         return;
       }
@@ -79,6 +107,7 @@ export default function BattleQueueScreen({ navigation }) {
 
   async function cancel() {
     cancelledRef.current = true;
+    if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
     if (user?.id) await battleCancelQueue(user.id);
     setPhase('idle');
     setElapsed(0);

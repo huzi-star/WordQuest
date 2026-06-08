@@ -4,6 +4,12 @@
 //   1. LEVEL MODE (levelNumber 1-15) — exact config from the level table.
 //      No adaptive logic, just the fixed grid/words/time for that level.
 //   2. ADAPTIVE / QUICK PLAY — same heuristic as before.
+//
+// Every call is logged to the agent_logs ring buffer so the admin
+// dashboard's live Overview shows this rule-based agent firing in
+// real time alongside the LLM-using agents.
+
+const logger = require('../utils/logger');
 
 // Locked-in level table. Sole source of truth for Level Mode.
 const LEVEL_CONFIG = {
@@ -45,7 +51,7 @@ function levelConfigFor(n) {
   };
 }
 
-function difficultyAgent(playerStats = {}, options = {}) {
+function compute(playerStats = {}, options = {}) {
   // LEVEL MODE
   const lvl = Number(options.levelNumber) || 0;
   if (lvl >= 1 && lvl <= 15) {
@@ -60,31 +66,40 @@ function difficultyAgent(playerStats = {}, options = {}) {
   } = playerStats;
 
   if (!roundsPlayed || roundsPlayed === 0) {
-    return {
-      ...ADAPTIVE_CONFIG.easy,
-      reason: 'Starting easy — small grid to warm up.',
-    };
+    return { ...ADAPTIVE_CONFIG.easy, reason: 'Starting easy — small grid to warm up.' };
   }
 
   const wordsRatio = avgWordsFound / 5;
   const timeRatio = avgTimeLeft / 60;
 
   if (wordsRatio > 0.8 && timeRatio > 0.4) {
-    return {
-      ...ADAPTIVE_CONFIG.hard,
-      reason: 'Dominating performance — bumping to a 12×12 hard grid.',
-    };
+    return { ...ADAPTIVE_CONFIG.hard, reason: 'Dominating performance — bumping to a 12×12 hard grid.' };
   } else if (wordsRatio > 0.5) {
-    return {
-      ...ADAPTIVE_CONFIG.medium,
-      reason: 'Solid performance — switching to an 8×8 medium grid.',
-    };
+    return { ...ADAPTIVE_CONFIG.medium, reason: 'Solid performance — switching to an 8×8 medium grid.' };
   } else {
-    return {
-      ...ADAPTIVE_CONFIG.easy,
-      reason: 'Easy round — a smaller grid to build confidence.',
-    };
+    return { ...ADAPTIVE_CONFIG.easy, reason: 'Easy round — a smaller grid to build confidence.' };
   }
+}
+
+function difficultyAgent(playerStats = {}, options = {}) {
+  const startedAt = Date.now();
+  const out = compute(playerStats, options);
+  try {
+    logger.push({
+      agent: 'difficultyAgent', status: 'ok',
+      durationMs: Date.now() - startedAt,
+      prompt: JSON.stringify({ playerStats, options }).slice(0, 600),
+      response: JSON.stringify(out).slice(0, 600),
+      meta: {
+        tool: 'Local logic',
+        decision: `difficulty=${out.difficulty}, grid=${out.gridSize}, words=${out.wordCount}, time=${out.timeLimit}s`,
+        reason: out.reason || null,
+        fallback: false,
+        userId: options.userId || null,
+      },
+    });
+  } catch (_) {}
+  return out;
 }
 
 module.exports = difficultyAgent;

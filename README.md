@@ -15,9 +15,10 @@ polished cartoonish 3D style.
 
 | What | Link |
 |---|---|
-| 📱 Latest APK (v3.8.0) | https://expo.dev/artifacts/eas/85gHn8ZeWBrEGhCBQjxk72.apk |
+| 📱 Latest APK (v5.5.8) | https://expo.dev/artifacts/eas/aK4Z8Dh8PLxtp3HHU2nvyp.apk |
 | 💻 GitHub | https://github.com/huzi-star/WordQuest |
 | 🌐 Backend (live) | https://backend-liart-three-60.vercel.app |
+| 🧠 **Admin dashboard** | https://backend-liart-three-60.vercel.app/admin |
 | 🧠 Agent traces | https://backend-liart-three-60.vercel.app/logs |
 | 📡 Game dashboard | https://backend-liart-three-60.vercel.app/dashboard |
 | 🗄 Supabase project | https://supabase.com/dashboard/project/epjndqbazobrfhovhpza |
@@ -74,27 +75,30 @@ Coupons: `HUZIQUEST` → 7-day Pro · `HUZIBUILD` → 7-day Pro Max.
 
 ## 🤖 Backend AI agents
 
-The backend is an Express server orchestrating **nine specialised agents**
-behind a small REST surface (deployed on Vercel).
+The backend is an Express server orchestrating **15 specialised agents**
+behind a small REST surface (deployed on Vercel). Every agent call is logged
+to Supabase `agent_logs` and surfaces in the live admin dashboard.
 
 | Agent | Engine | Role |
 |---|---|---|
-| 🎚 **difficultyAgent** | Pure logic | Reads rolling player stats, picks easy/medium/hard + grid + time. Surfaces a human-readable reason. |
-| 🎨 **levelGeneratorAgent** | gpt-4o-mini | Picks a category, generates words for that grid size, builds an 8-direction word-search grid (horizontal / vertical / 4 diagonals), writes a fun fact. |
-| ⚖ **refereeAgent** | Pure logic | Validates each word, computes base + bonuses. Single source of truth for scoring. |
-| 🏅 **rewardAgent** | gpt-4o-mini | Evaluates badge conditions, generates encouragement + a forward-looking next-round preview. |
-| 🎓 **tutorAgent** | gpt-4o-mini | After a found word, writes a one-sentence cultural / educational note. |
-| 🎙 **commentatorAgent** | gpt-4o-mini | Live in-round commentary on milestones (half-time, low-time, streak, idle). Falls back to templates. |
-| 🧠 **coachAgent** | gpt-4o-mini | End-of-session analysis: strengths, areas to improve, headline summary. |
-| 😏 **chaalbaazAgent** | gpt-4o-mini + logic | Adversary persona — silently escalates difficulty when player is dominating, plus on-demand trash talk. |
-| ❓ **quizAgent** | gpt-4o-mini | Generates 20 multi-choice questions per session, varied topics, anti-repeat (recent question texts excluded from prompt). |
+| 🛡 **guardrailAgent** | Local rules (Layers 1-4) + optional gpt-4o-mini (Layer 5) | Safety gate — every AI output passes through. Blocks offensive / non-age-appropriate / too-difficult / repeat content. |
+| 🎚 **difficultyAgent** | Pure logic | Reads rolling player stats, picks easy/medium/hard + grid + time. Surfaces a human-readable reason. Also fires telemetry in tier-locked Quick Play. |
+| 🎨 **levelGeneratorAgent** | gpt-4o-mini | Picks a category, generates words for that grid size, builds an 8-direction word-search grid, writes a fun fact. |
+| ⚖ **refereeAgent** | Pure logic | Validates every word attempt (valid OR invalid) so each kid action surfaces in the live pipeline. |
+| 🏅 **rewardAgent** | Local logic | Round-complete badges + encouragement. |
+| 🎓 **tutorAgent** | gpt-4o-mini | One-line cultural / contextual trivia after a Quick Play word find. |
+| 🌐 **translateAgent** | gpt-4o-mini | Translates every word-card field into Urdu / Hindi / Arabic / Spanish / French. |
+| 🧠 **coachAgent** | gpt-4o-mini | End-of-round analysis: weaknesses, strengths, "next 3 rounds" prescription, reads last-10-games from `wq_player_memory`. |
+| 😏 **chaalbaazAgent** | gpt-4o-mini + logic | Adversary persona. Three modes: `tune` (silently escalates difficulty when dominating), `intro` (pre-round modal in Quick Play HARD transitions), `chat` (round-end one-liner + standalone chat screen). |
+| 📚 **wordDetailAgent** | gpt-4o-mini | Kid-safe word card (meaning / example / synonym / antonym). 3-attempt factual-accuracy retry + category-aware prompting. |
+| 📖 **lessonAgent** | gpt-4o-mini | Generates Continue Learning unit lessons (4 types per unit), cached per `unit_id × lesson_index × lesson_type`. |
+| 🌅 **wordOfDayAgent** | gpt-4o-mini | One global "Word of the Day" per tier, 24h cache, throttled 60s per user. |
+| 🇵🇰 **pakistanQuestAgent** | gpt-4o-mini | Pakistan Culture Quest level + result + difficulty memory. |
+| 🇵🇰 **pakistanTutorAgent** | gpt-4o-mini | Curated bilingual (English + Roman Urdu) note for PK Quest words. |
+| 🔐 **event:auth** | Local | Login / signup signal — anchors the user's session in the admin pipeline. |
 
 Additional services:
 
-- **lessonAgent** — generates 4 lesson types (vocabulary / grammar / scramble / quiz) per learning unit; cached per `unit_id × lesson_index × lesson_type`
-- **wordOfDayAgent** — one global "Word of the Day" per tier, same word for every player
-- **wordDetailAgent** — kid-safe word card (meaning, sentence, example) on tap
-- **translateAgent** — translates the meaning into 5 languages on demand
 - **tutorChat (`/api/tutor/chat`)** — Pro Max 1-on-1 AI tutor chat with kid-safe system prompt
 - **parentApi (`/api/parent/summary`)** — weekly progress chart for the Parent Dashboard
 
@@ -153,16 +157,22 @@ Supabase so the same lesson is identical across devices.
 
 ## 📡 Live observability
 
-Two trace consoles are mounted on the backend:
+Three trace consoles are mounted on the backend:
 
 | Route | What it shows |
 |---|---|
-| `/logs` | Every AI agent run — prompt, response, latency, token usage, status. Filter by agent + status + range. |
-| `/dashboard` | Game-wide events grouped by category — tier-ups, quiz answers, daily words, battle results, subscriptions, lessons, avatars, auth, paywall hits. 9 tabbed views + per-category counts. |
+| **`/admin`** | Premium Lattice-style dashboard — Overview KPIs + Users list + per-user drill-down + per-section live Pipelines + Activity feed. **1-second polling** across Overview, Pipelines, and Activity. Real avatars from Supabase Storage. Per-section-visit pipelines (Practice → Home → Practice = 3 separate cards). |
+| `/logs` | Legacy per-agent trace console — prompt, response, latency, token usage, status. Filter by agent + status + range. |
+| `/dashboard` | Game-wide events grouped by category — tier-ups, quiz answers, daily words, battle results, subscriptions, lessons, avatars, auth, paywall hits. |
 
 Mobile fires events via `src/utils/trace.js` (`POST /api/event`) — fire-and-forget,
 never blocks gameplay. Backend AI agents log automatically through `utils/logger.js`.
-Both surfaces read from the same Supabase `agent_logs` table and refresh every 2–3 s.
+All three surfaces read from the same Supabase `agent_logs` table.
+
+**Admin dashboard pipelines** are grouped by 6 sections:
+**Home · Practice · Quick Play · 1v1 Battle · Pakistan Quest · Continue Learning.**
+Each entry into a section opens a NEW pipeline card — so a kid doing
+Practice → Home → Practice produces three separate cards, not one merged session.
 
 ---
 

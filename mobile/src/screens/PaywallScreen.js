@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, ActivityIndicator, Alert, TextInput, Animated, Easing,
+  View, Text, StyleSheet, TouchableOpacity, ImageBackground, ActivityIndicator, Alert, TextInput, Animated, Easing,
 } from 'react-native';
+// Gesture-handler ScrollView resolves a one-finger scroll-stuck issue
+// where the React Native ScrollView's responder was being intercepted by
+// sibling Animated overlays on Android.
+import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { upgradePlan, startTrial, applyCoupon } from '../utils/api';
 import { useAuth } from '../utils/auth';
@@ -10,7 +14,7 @@ import { trace } from '../utils/trace';
 
 const BG = require('../../home_design/home_bg.jpeg');
 
-// All "Levels" copy removed — the game uses Tiers (Bronze → Master) and
+// All "Levels" copy removed — the game uses Tiers (Bronze Master) and
 // Learning Units, not numbered levels.
 const PLANS = [
   {
@@ -33,12 +37,10 @@ const PLANS = [
     bestValue: true,
     bullets: [
       { c: '♾️', t: 'Unlimited Quick Play games' },
-      { c: '⭐', t: 'Unlimited Daily Challenge' },
-      { c: '❓', t: 'Unlimited Quiz Mode' },
       { c: '⚔️', t: '1v1 Battle Mode (MMR ranked)' },
       { c: '🏆', t: 'Bronze to Master tier progression' },
-      { c: '🏰', t: 'A1 → A2 Learning (24 units)' },
-      { c: '🚫', t: 'No ads · 5 hints per game' },
+      { c: '🏰', t: 'A1 A2 Learning (24 units)' },
+      { c: '🚫', t: 'No ads · 3 hints per game' },
       { c: '🔊', t: 'Voice pronunciation (5 languages)' },
     ],
   },
@@ -48,9 +50,10 @@ const PLANS = [
     color: '#d97706', shadow: '#7c2d12', accent: '#fcd34d',
     bullets: [
       { c: '👑', t: 'Everything in Pro' },
-      { c: '🏰', t: 'Full A1 → B1 Learning (32 units)' },
+      { c: '🏰', t: 'Full A1 B1 Learning (32 units)' },
       { c: '📊', t: 'Parent dashboard + weekly email' },
-      { c: '🤖', t: 'Personal AI Tutor (1-on-1 chat)' },
+      { c: '🤖', t: 'Personal AI Tutor (1-on-1 chat, 30/day)' },
+      { c: '💡', t: '4 hints per game' },
       { c: '🎖️', t: 'Achievement badges + rewards' },
       { c: '🎨', t: 'Custom avatars + nameplate' },
       { c: '📥', t: 'Offline mode' },
@@ -118,11 +121,11 @@ export default function PaywallScreen({ navigation, route }) {
     setBusy(null);
     if (r?.ok) {
       await refresh();
-      trace('subscription', `upgrade → ${key} (${cycle})`, { plan: key, cycle }, { userId: user?.id });
+      trace('subscription', `upgrade ${key} (${cycle})`, { plan: key, cycle }, { userId: user?.id });
       Alert.alert('🎉 Welcome to ' + (key === 'pro' ? 'Pro' : 'Pro Max') + '!', 'All premium features are now unlocked.');
       navigation.goBack();
     } else {
-      trace('subscription', `upgrade failed → ${key}`, { plan: key, error: r?.error }, { userId: user?.id, status: 'error' });
+      trace('subscription', `upgrade failed ${key}`, { plan: key, error: r?.error }, { userId: user?.id, status: 'error' });
       Alert.alert('Payment failed', r?.error || 'Try again in a moment.');
     }
   }
@@ -134,7 +137,7 @@ export default function PaywallScreen({ navigation, route }) {
     setBusy(null);
     if (r?.ok) {
       await refresh();
-      trace('subscription', `coupon → ${planKey}`, { plan: planKey, coupon: code }, { userId: user?.id });
+      trace('subscription', `coupon ${planKey}`, { plan: planKey, coupon: code }, { userId: user?.id });
       Alert.alert('🎁 Coupon applied!', `${planKey === 'pro' ? 'Pro' : 'Pro Max'} activated for 7 days.`);
       navigation.goBack();
     } else {
@@ -332,7 +335,7 @@ function PlanCard({ plan, cycle, isCurrent, busy, couponBusy, onPick, onCoupon }
       {/* CTA */}
       <TouchableOpacity
         activeOpacity={0.9}
-        delayPressIn={80}
+        delayPressIn={50}
         onPress={onPick}
         disabled={isCurrent || busy}
         style={[
@@ -348,7 +351,7 @@ function PlanCard({ plan, cycle, isCurrent, busy, couponBusy, onPick, onCoupon }
                 ? '✓ Current plan'
                 : plan.key === 'free'
                   ? 'Continue free'
-                  : 'Get ' + plan.name + '  →'}
+                  : 'Get ' + plan.name + ' '}
             </Text>}
       </TouchableOpacity>
 
@@ -368,7 +371,7 @@ function PlanCard({ plan, cycle, isCurrent, busy, couponBusy, onPick, onCoupon }
             />
             <TouchableOpacity
               activeOpacity={0.9}
-              delayPressIn={80}
+              delayPressIn={50}
               onPress={() => onCoupon(code)}
               disabled={!code || couponBusy}
               style={[styles.couponBtn, (!code || couponBusy) && { opacity: 0.6 }]}

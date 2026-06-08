@@ -42,6 +42,10 @@ const DEFAULTS = {
   dailyChallengeLastAttemptAt: 0,
   // When the user last completed a quiz. Quiz mode re-unlocks 12 h later.
   quizLastAttemptAt: 0,
+  // Pro Max AI Tutor daily message counter — local enforcement of the
+  // per-day cap. Reset whenever the date string changes.
+  aiTutorDateKey: '',
+  aiTutorCountToday: 0,
   // Per-level cached word lists for Level Mode retry. Shape:
   //   { [levelNumber]: { words, category, emoji, funFact } }
   levelWordCache: {},
@@ -55,6 +59,12 @@ const DEFAULTS = {
   // tierForScore(totalScoreEver) is higher than this, the TierUp screen
   // should be shown once, and this gets updated.
   lastSeenTier: 'bronze',
+  // Practice Mode (unranked) — completely separate from tier progression.
+  // These never touch totalScoreEver, leaderboard, or tier.
+  practiceHighScore: 0,
+  practiceRoundsPlayed: 0,
+  practiceRoundsWon: 0,
+  practiceCurrentDifficulty: 'easy',
 };
 
 function todayKey() {
@@ -203,6 +213,64 @@ export async function addScorePoints(delta) {
   } catch { return null; }
 }
 
+// Quick Play fail penalty — subtract `delta` from totalScoreEver,
+// clamped at 0. High score is NEVER reduced. Returns the new stats blob
+// or null on failure.
+export async function deductScorePoints(delta) {
+  const dec = Math.max(0, Number(delta) || 0);
+  if (!dec) return null;
+  try {
+    const current = await loadStats();
+    const newTotal = Math.max(0, (current.totalScoreEver || 0) - dec);
+    const next = { ...current, totalScoreEver: newTotal };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
+}
+
+// Practice Mode — add per-word points to highScore ONLY. Tier
+// totalScoreEver / leaderboard remain untouched. Also bumps a separate
+// practiceHighScore counter so the unranked best is visible on the
+// Practice screen.
+export async function addPracticeScore(delta) {
+  const inc = Math.max(0, Number(delta) || 0);
+  if (!inc) return null;
+  try {
+    const current = await loadStats();
+    const newHigh = (current.highScore || 0) + inc;
+    const newPracticeHigh = (current.practiceHighScore || 0) + inc;
+    const next = {
+      ...current,
+      highScore: newHigh,
+      practiceHighScore: newPracticeHigh,
+    };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
+}
+
+export async function recordPracticeRound({ won = false } = {}) {
+  try {
+    const current = await loadStats();
+    const next = {
+      ...current,
+      practiceRoundsPlayed: (current.practiceRoundsPlayed || 0) + 1,
+      practiceRoundsWon: (current.practiceRoundsWon || 0) + (won ? 1 : 0),
+    };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
+}
+
+export async function setPracticeDifficulty(diff) {
+  try {
+    const current = await loadStats();
+    const next = { ...current, practiceCurrentDifficulty: diff || 'easy' };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return next;
+  } catch { return null; }
+}
+
 export async function markTierSeen(tierKey) {
   if (!tierKey) return null;
   try {
@@ -263,6 +331,30 @@ export async function markDailyAttempt() {
     await AsyncStorage.setItem(K(), JSON.stringify(next));
     return next;
   } catch { return null; }
+}
+
+// AI Tutor — read today's message count. Resets at local midnight (i.e.
+// whenever the YYYY-MM-DD key string changes from what we stored).
+function _todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+export async function getAiTutorToday() {
+  try {
+    const cur = await loadStats();
+    if (cur.aiTutorDateKey !== _todayKey()) return 0;
+    return Number(cur.aiTutorCountToday) || 0;
+  } catch { return 0; }
+}
+export async function incAiTutorToday() {
+  try {
+    const cur = await loadStats();
+    const today = _todayKey();
+    const count = (cur.aiTutorDateKey === today ? Number(cur.aiTutorCountToday) || 0 : 0) + 1;
+    const next = { ...cur, aiTutorDateKey: today, aiTutorCountToday: count };
+    await AsyncStorage.setItem(K(), JSON.stringify(next));
+    return count;
+  } catch { return 0; }
 }
 
 // Record a score against a specific level number, keeping the highest

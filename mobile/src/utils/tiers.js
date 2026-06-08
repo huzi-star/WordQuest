@@ -33,6 +33,17 @@ export function tierUpDelta(lastSeenTierKey, totalScore = 0) {
   return null;
 }
 
+// Has the player dropped below their previous tier? Returns
+// { fromTier, toTier } if newScore now belongs to a tier with lower rank
+// than `prevTierKey`. Used to trigger the TierDown screen after a Quick
+// Play fail penalty deducts points.
+export function tierDownDelta(prevTierKey, newScore = 0) {
+  const prev = TIERS.find((t) => t.key === prevTierKey) || TIERS[0];
+  const now = tierForScore(newScore);
+  if (now.rank < prev.rank) return { fromTier: prev.key, toTier: now.key };
+  return null;
+}
+
 // Progress within the current tier (0..1) given total score.
 export function tierProgress(score = 0) {
   const cur = tierForScore(score);

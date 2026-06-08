@@ -20,11 +20,6 @@ const SLIDES = [
     body: 'Swipe across the letters — horizontal, vertical, or diagonal — to find words. The faster you find them, the more points you earn!',
   },
   {
-    key: 'daily',
-    title: 'Daily Challenges & Quiz Mode!',
-    body: 'A new puzzle every day for everyone in the world. Plus test your knowledge with fun quizzes!',
-  },
-  {
     key: 'tiers',
     title: 'Climb the Tiers & Battle!',
     body: 'Rise from Bronze to Master. Challenge players in 1v1 battles and dominate the leaderboard!',
@@ -104,7 +99,7 @@ function IllustrationWelcome() {
 
 function IllustrationFind() {
   // Hand swiping across a colorful word grid, stars popping
-  // Cycle: horizontal → vertical → diagonal — so the user sees all 3 directions.
+  // Cycle: horizontal vertical diagonal — so the user sees all 3 directions.
   const swipe = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.loop(Animated.sequence([
@@ -318,7 +313,7 @@ export default function OnboardingScreen({ navigation }) {
               style={styles.nextBtn}
               onPress={() => go(Math.min(SLIDES.length - 1, index + 1))}
             >
-              <Text style={styles.nextText}>Next  →</Text>
+              <Text style={styles.nextText}>Next </Text>
             </TouchableOpacity>
           ) : (
             <Animated.View style={{ transform: [{ scale: startBounce }] }}>

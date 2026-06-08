@@ -1,5 +1,9 @@
 // refereeAgent.js
-// Pure logic — validates a player's word and computes points.
+// Pure logic — validates a player's word and computes points. Logs every
+// decision to agent_logs so the admin dashboard's live feed reflects
+// each word the kid tries in real time.
+
+const logger = require('../utils/logger');
 
 const VALID_MSGS = ['Zabardast! +{x} points', 'Sahi jawab!', 'Wah!'];
 const INVALID_MSGS = ['Yeh list mein nahi', 'Dobara try karo'];
@@ -11,34 +15,41 @@ function comboMultiplier(streak) {
   return 1;
 }
 
-function refereeAgent({ word, wordList = [], foundWords = [], timeLeft = 0, score = 0, streak = 0 }) {
+function refereeAgent({ word, wordList = [], foundWords = [], timeLeft = 0, score = 0, streak = 0, userId = null }) {
+  const startedAt = Date.now();
   const upper = String(word || '').toUpperCase();
   const list = wordList.map(w => String(w).toUpperCase());
   const found = foundWords.map(w => String(w).toUpperCase());
+  function log(out, decision) {
+    try {
+      logger.push({
+        agent: 'refereeAgent', status: 'ok',
+        durationMs: Date.now() - startedAt,
+        prompt: JSON.stringify({ word: upper, wordListSize: list.length, foundCount: found.length, timeLeft, score, streak }).slice(0, 600),
+        response: JSON.stringify(out).slice(0, 600),
+        meta: { tool: 'Local dictionary', decision, reason: out.message || null, fallback: false, userId },
+      });
+    } catch (_) {}
+    return out;
+  }
 
   const alreadyFound = found.includes(upper);
   const inList = list.includes(upper);
 
   if (alreadyFound) {
-    return {
-      isValid: false,
-      alreadyFound: true,
-      pointsEarned: 0,
-      newScore: score,
+    return log({
+      isValid: false, alreadyFound: true, pointsEarned: 0, newScore: score,
       message: 'Yeh pehle mil gaya tha!',
       breakdown: { basePoints: 0, timeBonus: 0, multiplier: 1 },
-    };
+    }, `REJECT "${upper}" — already found`);
   }
 
   if (!inList) {
-    return {
-      isValid: false,
-      alreadyFound: false,
-      pointsEarned: 0,
-      newScore: score,
+    return log({
+      isValid: false, alreadyFound: false, pointsEarned: 0, newScore: score,
       message: INVALID_MSGS[Math.floor(Math.random() * INVALID_MSGS.length)],
       breakdown: { basePoints: 0, timeBonus: 0, multiplier: 1 },
-    };
+    }, `REJECT "${upper}" — not in word list`);
   }
 
   // Streak passed in reflects the streak BEFORE this word lands; +1 because
@@ -51,14 +62,11 @@ function refereeAgent({ word, wordList = [], foundWords = [], timeLeft = 0, scor
   const msgTpl = VALID_MSGS[Math.floor(Math.random() * VALID_MSGS.length)];
   const message = msgTpl.replace('{x}', totalPoints);
 
-  return {
-    isValid: true,
-    alreadyFound: false,
-    pointsEarned: totalPoints,
-    newScore: score + totalPoints,
-    message,
+  return log({
+    isValid: true, alreadyFound: false, pointsEarned: totalPoints,
+    newScore: score + totalPoints, message,
     breakdown: { basePoints, timeBonus, multiplier, effectiveStreak },
-  };
+  }, `ACCEPT "${upper}" +${totalPoints} pts (×${multiplier} combo)`);
 }
 
 module.exports = refereeAgent;

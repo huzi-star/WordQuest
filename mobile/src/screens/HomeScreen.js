@@ -5,6 +5,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Speech from 'expo-speech';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { speakSmooth } from '../utils/voice';
 import { loadStats } from '../utils/storage';
 import { useAuth } from '../utils/auth';
 import { playBgm, tap as tapSfx } from '../utils/sound';
@@ -17,6 +19,7 @@ import { fetchWordOfDay, learnGetPath } from '../utils/api';
 import { usePlan, canUseDaily } from '../utils/plan';
 import { useSettings } from '../utils/settings';
 import { trace } from '../utils/trace';
+import { rfs } from '../utils/responsive';
 
 const BG = require('../../home_design/home_bg.jpeg');
 const ICO_TROPHY = require('../../home_design/tropy.png');
@@ -40,17 +43,34 @@ export default function HomeScreen({ navigation }) {
   const haloOpacity = useRef(new Animated.Value(0.45)).current;
   const playBob = useRef(new Animated.Value(0)).current;
   const swordShake = useRef(new Animated.Value(0)).current;
+  // 3D yaw rotation for the hero logo (perspective tilt feel).
+  const heroYaw = useRef(new Animated.Value(0)).current;
+  // Orbital ring spin around the hero.
+  const heroOrbit = useRef(new Animated.Value(0)).current;
+  // Shine sweep across Quick Play.
+  const playShineSweep = useRef(new Animated.Value(0)).current;
+  // Continuous gentle Y-bob shared across secondary cards.
+  const cardFloat = useRef(new Animated.Value(0)).current;
+  // Tilt sway on stat cards.
+  const statTilt = useRef(new Animated.Value(0)).current;
+  // Press-squish scale for big CTAs.
+  const playPress = useRef(new Animated.Value(1)).current;
+  const practicePress = useRef(new Animated.Value(1)).current;
 
   // Staggered entrance animations — each card fades in + slides up.
   const entries = useRef({
-    header: new Animated.Value(0),
-    logo:   new Animated.Value(0),
-    stats:  new Animated.Value(0),
-    play:   new Animated.Value(0),
-    learn:  new Animated.Value(0),
-    modes:  new Animated.Value(0),
-    daily:  new Animated.Value(0),
+    header:   new Animated.Value(0),
+    logo:     new Animated.Value(0),
+    stats:    new Animated.Value(0),
+    practice: new Animated.Value(0),
+    play:     new Animated.Value(0),
+    learn:    new Animated.Value(0),
+    modes:    new Animated.Value(0),
   }).current;
+  const practiceGlow = useRef(new Animated.Value(0.4)).current;
+  const playGlow = useRef(new Animated.Value(0.4)).current;
+  const learnGlow = useRef(new Animated.Value(0.45)).current;
+  const wodSparkle = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Logo pulse + halo glow pulse.
@@ -76,17 +96,69 @@ export default function HomeScreen({ navigation }) {
       Animated.timing(swordShake, { toValue: 0,  duration: 70, useNativeDriver: true }),
     ])).start();
 
-    // Staggered card entrance.
-    Animated.stagger(90, [
-      Animated.spring(entries.header, { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
-      Animated.spring(entries.logo,   { toValue: 1, friction: 6, tension: 60, useNativeDriver: true }),
-      Animated.spring(entries.stats,  { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
-      Animated.spring(entries.play,   { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
-      Animated.spring(entries.learn,  { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
-      Animated.spring(entries.modes,  { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
-      Animated.spring(entries.daily,  { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
+    // Bouncier staggered card entrance — lower friction = overshoot bounce.
+    Animated.stagger(95, [
+      Animated.spring(entries.header,   { toValue: 1, friction: 5, tension: 70, useNativeDriver: true }),
+      Animated.spring(entries.logo,     { toValue: 1, friction: 4, tension: 80, useNativeDriver: true }),
+      Animated.spring(entries.stats,    { toValue: 1, friction: 5, tension: 75, useNativeDriver: true }),
+      Animated.spring(entries.practice, { toValue: 1, friction: 5, tension: 75, useNativeDriver: true }),
+      Animated.spring(entries.play,     { toValue: 1, friction: 4, tension: 85, useNativeDriver: true }),
+      Animated.spring(entries.learn,    { toValue: 1, friction: 5, tension: 70, useNativeDriver: true }),
+      Animated.spring(entries.modes,    { toValue: 1, friction: 5, tension: 70, useNativeDriver: true }),
     ]).start();
+
+    // Soft glow pulses (Practice purple, Quick Play green, Continue Learning amber).
+    const mkPulse = (val, lo, hi, dur) =>
+      Animated.loop(Animated.sequence([
+        Animated.timing(val, { toValue: hi, duration: dur, useNativeDriver: true }),
+        Animated.timing(val, { toValue: lo, duration: dur, useNativeDriver: true }),
+      ])).start();
+    mkPulse(practiceGlow, 0.35, 0.85, 1400);
+    mkPulse(playGlow, 0.4, 0.95, 1100);
+    mkPulse(learnGlow, 0.45, 1, 1500);
+
+    // Word of the Day sparkle pulse.
+    Animated.loop(Animated.sequence([
+      Animated.timing(wodSparkle, { toValue: 1, duration: 900, useNativeDriver: true }),
+      Animated.timing(wodSparkle, { toValue: 0, duration: 900, useNativeDriver: true }),
+    ])).start();
+    // Hero 3D yaw rotation — gentle left-right tilt for depth.
+    Animated.loop(Animated.sequence([
+      Animated.timing(heroYaw, { toValue: 1,  duration: 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(heroYaw, { toValue: -1, duration: 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(heroYaw, { toValue: 0,  duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ])).start();
+    // Hero orbital ring — continuous slow rotation behind the logo.
+    Animated.loop(
+      Animated.timing(heroOrbit, { toValue: 1, duration: 11000, easing: Easing.linear, useNativeDriver: true }),
+    ).start();
+    // Quick Play shine sweep — diagonal white band traverses left›right repeatedly.
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(700),
+        Animated.timing(playShineSweep, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(playShineSweep, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    ).start();
+    // Shared card float — used by Practice / Pakistan / Recommended / Modes etc.
+    Animated.loop(Animated.sequence([
+      Animated.timing(cardFloat, { toValue: -4, duration: 1700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(cardFloat, { toValue:  0, duration: 1700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ])).start();
+    // Stat card sway — barely-there ±2deg tilt for cartoony life.
+    Animated.loop(Animated.sequence([
+      Animated.timing(statTilt, { toValue:  1, duration: 2400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(statTilt, { toValue: -1, duration: 2400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ])).start();
   }, []);
+
+  // Squish helpers for press-down feedback on the two biggest CTAs.
+  function pressIn(val) {
+    Animated.spring(val, { toValue: 0.94, useNativeDriver: true, friction: 6, tension: 200 }).start();
+  }
+  function pressOut(val) {
+    Animated.spring(val, { toValue: 1, useNativeDriver: true, friction: 4, tension: 180 }).start();
+  }
 
   function entryStyle(key) {
     return {
@@ -127,8 +199,32 @@ export default function HomeScreen({ navigation }) {
         }
         const tier = tierForScore(s.totalScoreEver || 0);
         try {
-          const w = await fetchWordOfDay(tier.key);
-          if (!cancelled && w?.ok && w.word) setWod(w);
+          // 24-HOUR PER-USER CACHE for the Word of the Day. We bind the
+          // cache key to the user so a phone shared by two kids still
+          // shows each kid their own daily word. After 24h since the
+          // last fetch we re-pull from the server and rewrite the cache.
+          const wodKey = `wod:cache:${user?.id || 'guest'}:${tier.key}`;
+          let cached = null;
+          try {
+            const raw = await AsyncStorage.getItem(wodKey);
+            if (raw) cached = JSON.parse(raw);
+          } catch (_) {}
+          const now = Date.now();
+          const ageMs = cached?.ts ? (now - cached.ts) : Infinity;
+          if (cached?.word && ageMs < 24 * 60 * 60 * 1000) {
+            if (!cancelled) setWod(cached);
+          } else {
+            const w = await fetchWordOfDay(tier.key);
+            if (!cancelled && w?.ok && w.word) {
+              const fresh = { ...w, ts: now };
+              setWod(fresh);
+              try { await AsyncStorage.setItem(wodKey, JSON.stringify(fresh)); } catch (_) {}
+            } else if (!cancelled && cached?.word) {
+              // Backend down but we have a stale cache — keep showing it
+              // rather than the hard-coded fallback word.
+              setWod(cached);
+            }
+          }
         } catch (_) {}
         if (user?.id) {
           try {
@@ -163,10 +259,12 @@ export default function HomeScreen({ navigation }) {
 
   function speakWord() {
     if (!wod?.word) return;
-    try {
-      Speech.stop();
-      Speech.speak(`${wod.word}. ${wod.meaning || ''}`, { language: 'en-US', rate: 0.9 });
-    } catch (_) {}
+    // Friendly female voice speaks the word + meaning (+ example if any)
+    // in one smooth utterance. Tap reacts instantly — no awkward pause.
+    speakSmooth(
+      `${wod.word}. ${wod.meaning || ''}${wod.example ? `. ${wod.example}` : ''}`,
+      { language: 'english' },
+    );
   }
 
   const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Player';
@@ -194,7 +292,13 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <ImageBackground source={BG} style={styles.bg} resizeMode="cover">
-      <View style={styles.tint} />
+      {/* Sky-gradient tint stack: deep navy at top emerald wash at bottom.
+          Three layered overlays simulate a vertical gradient without a
+          dependency on react-native-linear-gradient. */}
+      <View style={styles.tintTop} pointerEvents="none" />
+      <View style={styles.tintMid} pointerEvents="none" />
+      <View style={styles.tintBottom} pointerEvents="none" />
+      <FloatingLetters />
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
@@ -228,14 +332,38 @@ export default function HomeScreen({ navigation }) {
             </View>
           </Animated.View>
 
-          {/* HERO LOGO with pulsing soft glow halo */}
+          {/* HERO LOGO — 3D cartoonish: pulsing halo, orbital sparkle ring,
+              continuous yaw tilt for depth. */}
           <Animated.View style={[styles.heroWrap, entryStyle('logo')]}>
             <Animated.View style={[styles.heroHalo, { opacity: haloOpacity, transform: [{ scale: pulse }] }]} />
-            <Animated.View style={{ transform: [{ scale: pulse }] }}>
+            {/* Orbital ring with 4 sparkles, rotating continuously. */}
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.heroOrbit,
+                { transform: [{ rotate: heroOrbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] },
+              ]}
+            >
+              <Text style={[styles.heroOrbitDot, styles.heroOrbitN]}>✦</Text>
+              <Text style={[styles.heroOrbitDot, styles.heroOrbitE]}>✧</Text>
+              <Text style={[styles.heroOrbitDot, styles.heroOrbitS]}>✦</Text>
+              <Text style={[styles.heroOrbitDot, styles.heroOrbitW]}>✧</Text>
+            </Animated.View>
+            <Animated.View
+              style={{
+                transform: [
+                  { perspective: 800 },
+                  { rotateY: heroYaw.interpolate({ inputRange: [-1, 1], outputRange: ['-14deg', '14deg'] }) },
+                  { scale: pulse },
+                ],
+              }}
+            >
               <View style={styles.heroOuter}>
                 <View style={styles.heroInner}>
                   <Image source={APP_LOGO} style={styles.heroLogo} />
                 </View>
+                {/* Top-left gloss highlight for cartoonish 3D ball look. */}
+                <View pointerEvents="none" style={styles.heroGloss} />
               </View>
             </Animated.View>
           </Animated.View>
@@ -244,17 +372,130 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.brandPillText}>AI-POWERED · WORLD THEMED</Text>
           </Animated.View>
 
-          {/* STATS ROW */}
-          <Animated.View style={[styles.statsRow, entryStyle('stats')]}>
+          {/* STATS ROW — gentle continuous sway gives a cartoon-toy feel. */}
+          <Animated.View
+            style={[
+              styles.statsRow,
+              entryStyle('stats'),
+              { transform: [...entryStyle('stats').transform, { rotate: statTilt.interpolate({ inputRange: [-1, 1], outputRange: ['-1.4deg', '1.4deg'] }) }] },
+            ]}
+          >
             <StatCard icon={ICO_TROPHY} label="HIGH SCORE" value={stats.highScore} color="#ef4444" shadow="#7f1d1d" />
             <StatCard icon={ICO_STREAK} label="STREAK" value={stats.bestStreak} color="#f97316" shadow="#7c2d12" />
             <StatCard icon={ICO_TARGET} label="PERFECT" value={stats.perfectRounds} color="#a855f7" shadow="#581c87" />
           </Animated.View>
 
-          {/* QUICK PLAY — bobbing button */}
-          <Animated.View style={[entryStyle('play'), { transform: [...entryStyle('play').transform, { translateY: playBob }] }]}>
-            <TouchableOpacity activeOpacity={0.92} onPress={startAdaptive} style={styles.playCard}>
+          {/* Recommended For You section removed (learningPathAgent retired). */}
+
+          {/* PRACTICE — unranked, AI-adaptive. Continuous gentle float +
+              press-squish for a 3D cartoonish button feel. */}
+          <Animated.View
+            style={[
+              entryStyle('practice'),
+              {
+                position: 'relative',
+                transform: [
+                  ...entryStyle('practice').transform,
+                  { translateY: cardFloat },
+                  { scale: practicePress },
+                ],
+              },
+            ]}
+          >
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.practiceGlow, { opacity: practiceGlow }]}
+            />
+            <TouchableOpacity
+              activeOpacity={0.92}
+              delayPressIn={50}
+              onPressIn={() => pressIn(practicePress)}
+              onPressOut={() => pressOut(practicePress)}
+              onPress={() => { tapSfx(); navigation.navigate('Practice'); }}
+              style={styles.practiceCard}
+            >
+              <View style={styles.practiceShine} />
+              <View style={styles.practiceLeft}>
+                <Text style={styles.practiceOwl}>🦉</Text>
+              </View>
+              <View style={styles.practiceBody}>
+                <Text style={styles.practiceTitle}>PRACTICE</Text>
+                <Text style={styles.practiceSub}>Build your skills · No pressure, no rank</Text>
+              </View>
+              <View style={styles.practiceUnranked}>
+                <Text style={styles.practiceUnrankedText}>UNRANKED</Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* PAKISTAN CULTURE QUEST — green-flag themed card with gentle float. */}
+          <Animated.View
+            style={[
+              entryStyle('play'),
+              { transform: [...entryStyle('play').transform, { translateY: cardFloat }] },
+            ]}
+          >
+            <TouchableOpacity
+              activeOpacity={0.92}
+              delayPressIn={50}
+              onPress={() => { tapSfx(); navigation.navigate('PakistanQuest'); }}
+              style={styles.pkCard}
+            >
+              <View style={styles.pkStar} />
+              <View style={styles.pkBody}>
+                <Text style={styles.pkFlag}>🇵🇰</Text>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.pkTitle}>PAKISTAN QUEST</Text>
+                  <Text style={styles.pkSub}>7 packs · English + Roman Urdu</Text>
+                </View>
+                <View style={styles.pkBadge}>
+                  <Text style={styles.pkBadgeText}>NEW</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* QUICK PLAY — bobbing, glowing, press-squishing, with an animated
+              diagonal shine sweep crossing the surface. */}
+          <Animated.View
+            style={[
+              entryStyle('play'),
+              {
+                transform: [
+                  ...entryStyle('play').transform,
+                  { translateY: playBob },
+                  { scale: playPress },
+                ],
+                position: 'relative',
+              },
+            ]}
+          >
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.playGlow, { opacity: playGlow }]}
+            />
+            <TouchableOpacity
+              activeOpacity={0.92}
+              delayPressIn={50}
+              onPressIn={() => pressIn(playPress)}
+              onPressOut={() => pressOut(playPress)}
+              onPress={startAdaptive}
+              style={styles.playCard}
+            >
               <View style={styles.playShine} />
+              {/* Animated diagonal white sweep — pure visual flair. */}
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.playSweep,
+                  {
+                    transform: [
+                      { translateX: playShineSweep.interpolate({ inputRange: [0, 1], outputRange: [-260, 380] }) },
+                      { rotate: '-18deg' },
+                    ],
+                  },
+                ]}
+              />
               <Text style={styles.playTitle}>QUICK PLAY</Text>
               <View style={styles.playArrow}>
                 <Text style={styles.playArrowText}>▶</Text>
@@ -262,14 +503,27 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </Animated.View>
 
-          {/* CONTINUE LEARNING */}
-          <Animated.View style={[styles.learnCard, entryStyle('learn')]}>
+          {/* CONTINUE LEARNING — amber pulsing border glow + gentle float. */}
+          <Animated.View
+            style={[
+              entryStyle('learn'),
+              {
+                position: 'relative',
+                transform: [...entryStyle('learn').transform, { translateY: cardFloat }],
+              },
+            ]}
+          >
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.learnGlow, { opacity: learnGlow }]}
+          />
+          <View style={styles.learnCard}>
             <Image source={ICO_UNIT_CASTLE} style={styles.learnCastle} resizeMode="contain" />
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={styles.learnLabel}>★ CONTINUE LEARNING</Text>
               <Text style={styles.learnTitle} numberOfLines={1}>{unitTitle}</Text>
               <Text style={styles.learnSub}>Stage {unitStage} · {unitsDone}/{totalUnits} units complete</Text>
-              {/* Thicker progress bar with yellow→green gradient simulated via 2 layered fills */}
+              {/* Thicker progress bar with yellow›green gradient simulated via 2 layered fills */}
               <View style={styles.learnTrack}>
                 <View style={[styles.learnFillYellow, { width: `${unitPct * 100}%` }]} />
                 <View style={[styles.learnFillGreen,  { width: `${unitPct * 100}%`, opacity: Math.min(1, unitPct * 1.5) }]} />
@@ -287,6 +541,7 @@ export default function HomeScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
           </Animated.View>
 
           {/* GAME MODES LABEL with joystick */}
@@ -312,11 +567,20 @@ export default function HomeScreen({ navigation }) {
 
             {/* Word of the Day */}
             <TouchableOpacity activeOpacity={0.9} onPress={speakWord} style={[styles.modeBox, styles.modeBoxGlow, { backgroundColor: '#8b5cf6', borderBottomColor: '#4c1d95', shadowColor: '#c4b5fd' }]}>
-              <Text style={styles.wodHeader}>✨ Word of the Day</Text>
+              <Animated.Text
+                style={[
+                  styles.wodHeader,
+                  {
+                    opacity: wodSparkle.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
+                    transform: [{ scale: wodSparkle.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }],
+                  },
+                ]}
+              >
+                ✨ Word of the Day
+              </Animated.Text>
               <View style={styles.wodScroll}>
                 <Text style={styles.wodWord} numberOfLines={1}>{(wod?.word || 'BRAVE').toUpperCase()}</Text>
                 <Text style={styles.wodMeaning} numberOfLines={3}>{wod?.meaning || 'Showing courage in difficult moments.'}</Text>
-                <Text style={styles.wodTap}>Tap for example →</Text>
               </View>
               <View style={styles.wodSpeaker}><Text style={styles.wodSpeakerIcon}>🔊</Text></View>
             </TouchableOpacity>
@@ -339,40 +603,81 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Daily + Quiz pair */}
-          <Animated.View style={[styles.dailyRow, entryStyle('daily')]}>
-            <TouchableOpacity activeOpacity={0.9} onPress={() => {
-              tapSfx();
-              if (!canUseDaily(plan, usage, 'daily')) {
-                navigation.navigate('Paywall', { reason: `Daily Challenge limit reached. Upgrade for unlimited.` });
-                return;
-              }
-              bump('daily');
-              navigation.navigate('DailyChallenge');
-            }} style={[styles.smallTile, { backgroundColor: '#facc15', borderBottomColor: '#a16207', shadowColor: '#facc15' }]}>
-              <Text style={styles.smallEmoji}>📅</Text>
-              <Text style={[styles.smallName, { color: '#7c2d12' }]}>Daily</Text>
-              <Text style={[styles.smallSub, { color: '#7c2d12' }]}>Today's puzzle</Text>
-            </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.9} onPress={() => {
-              tapSfx();
-              if (!canUseDaily(plan, usage, 'quiz')) {
-                navigation.navigate('Paywall', { reason: `Quiz limit reached today (${features.quizPerDay}/day). Upgrade for unlimited.` });
-                return;
-              }
-              bump('quiz');
-              navigation.navigate('Quiz');
-            }} style={[styles.smallTile, { backgroundColor: '#ef4444', borderBottomColor: '#7f1d1d', shadowColor: '#fb7185' }]}>
-              <Text style={styles.smallEmoji}>❓</Text>
-              <Text style={[styles.smallName, { color: '#fff' }]}>Quiz</Text>
-              <Text style={[styles.smallSub, { color: '#fee2e2' }]}>Test yourself</Text>
-            </TouchableOpacity>
-          </Animated.View>
-
           <View style={{ height: 24 }} />
         </ScrollView>
       </SafeAreaView>
     </ImageBackground>
+  );
+}
+
+// Colorful 3D-feel letter rain — drifting A-Z glyphs that rotate, scale,
+// and fade as they float up the screen. Replaces the older plain-star
+// particles to give the home screen a word-puzzle cartoonish vibe.
+function FloatingLetters() {
+  const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const COLORS = ['#fde047', '#f59e0b', '#fb923c', '#ef4444', '#22c55e', '#0ea5e9', '#a855f7', '#ec4899'];
+  const items = useRef(
+    Array.from({ length: 14 }).map((_, i) => ({
+      key: i,
+      char: LETTERS[Math.floor(Math.random() * LETTERS.length)],
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      x: Math.random() * 100,
+      size: 14 + Math.random() * 22,
+      drift: (Math.random() * 60) - 30,
+      duration: 9000 + Math.random() * 8000,
+      delay: Math.random() * 5000,
+      spinDir: Math.random() > 0.5 ? 1 : -1,
+      anim: new Animated.Value(0),
+    })),
+  ).current;
+
+  useEffect(() => {
+    items.forEach((a) => {
+      const loop = () => {
+        a.anim.setValue(0);
+        Animated.timing(a.anim, {
+          toValue: 1,
+          duration: a.duration,
+          delay: a.delay,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }).start(loop);
+      };
+      loop();
+    });
+  }, []);
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {items.map((a) => (
+        <Animated.Text
+          key={a.key}
+          style={{
+            position: 'absolute',
+            bottom: -50,
+            left: `${a.x}%`,
+            fontSize: a.size,
+            fontWeight: '900',
+            color: a.color,
+            textShadowColor: 'rgba(0,0,0,0.55)',
+            textShadowOffset: { width: 0, height: 2 },
+            textShadowRadius: 4,
+            opacity: a.anim.interpolate({
+              inputRange: [0, 0.15, 0.85, 1],
+              outputRange: [0, 0.85, 0.55, 0],
+            }),
+            transform: [
+              { translateY: a.anim.interpolate({ inputRange: [0, 1], outputRange: [0, -760] }) },
+              { translateX: a.anim.interpolate({ inputRange: [0, 1], outputRange: [0, a.drift] }) },
+              { rotate: a.anim.interpolate({ inputRange: [0, 1], outputRange: [`0deg`, `${a.spinDir * 360}deg`] }) },
+              { scale: a.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.6, 1.15, 0.7] }) },
+            ],
+          }}
+        >
+          {a.char}
+        </Animated.Text>
+      ))}
+    </View>
   );
 }
 
@@ -391,8 +696,20 @@ function StatCard({ icon, label, value, color, shadow }) {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1 },
-  tint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.28)' },
+  bg: { flex: 1, backgroundColor: '#0d1b2a' },
+  // Three-layer vertical gradient: navy mid emerald wash.
+  tintTop: {
+    position: 'absolute', top: 0, left: 0, right: 0, height: '45%',
+    backgroundColor: 'rgba(13,27,42,0.65)',
+  },
+  tintMid: {
+    position: 'absolute', top: '35%', left: 0, right: 0, height: '35%',
+    backgroundColor: 'rgba(26,39,68,0.40)',
+  },
+  tintBottom: {
+    position: 'absolute', bottom: 0, left: 0, right: 0, height: '45%',
+    backgroundColor: 'rgba(0,80,55,0.32)',
+  },
   scroll: { paddingHorizontal: 12, paddingTop: 4, paddingBottom: 16 },
   row: { flexDirection: 'row', alignItems: 'center' },
 
@@ -455,9 +772,36 @@ const styles = StyleSheet.create({
     borderWidth: 3, borderColor: '#fff',
   },
   heroLogo: { width: '100%', height: '100%' },
+  // Top-left highlight to mimic a glossy 3D ball.
+  heroGloss: {
+    position: 'absolute',
+    top: 6, left: 6,
+    width: 44, height: 28,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    transform: [{ rotate: '-22deg' }],
+  },
+  // Orbital ring around the hero — rotates continuously with 4 sparkles.
+  heroOrbit: {
+    position: 'absolute',
+    width: 200, height: 200,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  heroOrbitDot: {
+    position: 'absolute',
+    fontSize: 18,
+    color: '#fde047',
+    textShadowColor: 'rgba(250,204,21,0.85)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  heroOrbitN: { top: -2 },
+  heroOrbitE: { right: -2 },
+  heroOrbitS: { bottom: -2 },
+  heroOrbitW: { left: -2 },
 
   brand: {
-    color: '#dbeafe', fontSize: 40, fontWeight: '900',
+    color: '#dbeafe', fontSize: rfs(38), fontWeight: '900',
     textAlign: 'center', marginTop: 8, letterSpacing: 0.5,
     textShadowColor: '#0ea5e9', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 14,
   },
@@ -498,7 +842,7 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1,
   },
   statValue: {
-    color: '#fff', fontSize: 28, fontWeight: '900', marginTop: 4,
+    color: '#fff', fontSize: rfs(26), fontWeight: '900', marginTop: 4,
     textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 3 }, textShadowRadius: 3,
   },
 
@@ -517,8 +861,15 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
+  // Diagonal white sweep that traverses the Quick Play card every cycle.
+  playSweep: {
+    position: 'absolute',
+    top: -30, bottom: -30,
+    width: 70,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
   playTitle: {
-    color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 1,
+    color: '#fff', fontSize: rfs(26), fontWeight: '900', letterSpacing: 1,
     textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2,
   },
   playArrow: {
@@ -634,17 +985,125 @@ const styles = StyleSheet.create({
   },
   wodSpeakerIcon: { fontSize: 12 },
 
-  // Daily + Quiz
-  dailyRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  smallTile: {
-    flex: 1, borderRadius: 18, paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 3, borderColor: '#fff',
-    borderBottomWidth: 7,
-    shadowOpacity: 0.55, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
+  // Premium Practice card — full-width gradient-feel, blue›purple base.
+  recCard: {
+    backgroundColor: 'rgba(15,23,42,0.82)',
+    borderRadius: 22, padding: 14, marginBottom: 14,
+    borderWidth: 3, borderColor: '#fbbf24',
+    borderBottomWidth: 8, borderBottomColor: '#78350f',
+    shadowColor: '#fbbf24', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  smallEmoji: { fontSize: 30 },
-  smallName: { fontSize: 16, fontWeight: '900', marginTop: 4 },
-  smallSub: { fontSize: 9, fontWeight: '800', marginTop: 2, letterSpacing: 0.5 },
+  recHeader: { marginBottom: 10 },
+  recTitle: { color: '#fde68a', fontWeight: '900', fontSize: 13, letterSpacing: 1.4 },
+  recSub: { color: '#cbd5e1', fontSize: 11, marginTop: 2, fontWeight: '700' },
+  recWeakRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  recWeakChip: {
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,
+    backgroundColor: 'rgba(220,38,38,0.18)',
+    borderWidth: 1, borderColor: 'rgba(220,38,38,0.45)',
+  },
+  recWeakText: { color: '#fca5a5', fontSize: 10, fontWeight: '800' },
+  recItems: { gap: 8 },
+  recItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 10, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 2, borderColor: 'rgba(251,191,36,0.35)',
+  },
+  recItemNum: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: '#f59e0b', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: '#fff',
+  },
+  recItemNumText: { color: '#fff', fontWeight: '900', fontSize: 13 },
+  recItemTitle: { color: '#fff', fontWeight: '900', fontSize: 13 },
+  recItemRationale: { color: '#cbd5e1', fontSize: 10, marginTop: 2, lineHeight: 14 },
+  recItemArrow: { color: '#fde68a', fontWeight: '900', fontSize: 18, marginRight: 6 },
+
+  pkCard: {
+    backgroundColor: '#15803d',
+    borderRadius: 22, padding: 14, marginBottom: 14,
+    borderWidth: 3, borderColor: '#fff',
+    borderBottomWidth: 8, borderBottomColor: '#052e16',
+    shadowColor: '#16a34a', shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
+    position: 'relative', overflow: 'hidden',
+  },
+  pkStar: {
+    position: 'absolute',
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    top: -20, right: -10,
+  },
+  pkBody: { flexDirection: 'row', alignItems: 'center' },
+  pkFlag: { fontSize: 38 },
+  pkTitle: { color: '#fff', fontWeight: '900', fontSize: 17, letterSpacing: 1 },
+  pkSub: { color: '#bbf7d0', fontSize: 11, marginTop: 2, fontWeight: '700' },
+  pkBadge: {
+    paddingHorizontal: 8, paddingVertical: 4,
+    backgroundColor: '#fbbf24',
+    borderRadius: 8,
+    borderWidth: 2, borderColor: '#fff',
+  },
+  pkBadgeText: { color: '#78350f', fontWeight: '900', fontSize: 10, letterSpacing: 0.8 },
+
+  practiceGlow: {
+    position: 'absolute', left: 8, right: 8, top: 4, bottom: 4,
+    borderRadius: 26, backgroundColor: '#7c4dff',
+    shadowColor: '#7c4dff', shadowOpacity: 1, shadowRadius: 22,
+    shadowOffset: { width: 0, height: 0 }, elevation: 14,
+  },
+  practiceCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 16, paddingHorizontal: 16, borderRadius: 24,
+    backgroundColor: '#1e1b4b',
+    borderWidth: 3, borderColor: '#7c4dff',
+    borderBottomWidth: 9, borderBottomColor: '#311b92',
+    overflow: 'hidden',
+    marginBottom: 14,
+  },
+  practiceShine: {
+    position: 'absolute', top: 0, left: 0, right: 0, height: 18,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  practiceLeft: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: '#3b0d70',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: '#a78bfa',
+    borderBottomWidth: 5, borderBottomColor: '#1e1b4b',
+  },
+  practiceOwl: { fontSize: 30 },
+  practiceBody: { flex: 1, gap: 2 },
+  practiceTitle: {
+    color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: 1.6,
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 3,
+  },
+  practiceSub: { color: '#c4b5fd', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
+  practiceUnranked: {
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
+    backgroundColor: '#475569',
+    borderWidth: 2, borderColor: '#94a3b8',
+    borderBottomWidth: 4, borderBottomColor: '#0f172a',
+  },
+  practiceUnrankedText: {
+    color: '#e2e8f0', fontSize: 9, fontWeight: '900', letterSpacing: 1.2,
+  },
+
+  // Quick Play pulsing green glow.
+  playGlow: {
+    position: 'absolute', left: 6, right: 6, top: 4, bottom: 4,
+    borderRadius: 28, backgroundColor: '#00e676',
+    shadowColor: '#00e676', shadowOpacity: 1, shadowRadius: 24,
+    shadowOffset: { width: 0, height: 0 }, elevation: 14,
+  },
+
+  // Continue Learning amber border pulse.
+  learnGlow: {
+    position: 'absolute', left: 4, right: 4, top: 2, bottom: 2,
+    borderRadius: 24, backgroundColor: '#ffd700',
+    shadowColor: '#ffd700', shadowOpacity: 0.9, shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 }, elevation: 12,
+  },
 });

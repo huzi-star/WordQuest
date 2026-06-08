@@ -8,6 +8,7 @@ import { useSettings } from '../utils/settings';
 import { useAuth } from '../utils/auth';
 import { uploadAvatarPhoto } from '../utils/supabase';
 import { trace } from '../utils/trace';
+import { rs, rfs, wp, IS_SMALL } from '../utils/responsive';
 
 const BG = require('../../home_design/home_bg.jpeg');
 
@@ -63,8 +64,8 @@ export default function AvatarScreen({ navigation }) {
         Alert.alert(
           'Upload failed',
           isMissingBucket
-            ? `Storage bucket "avatars" is missing or not public. Ask the admin to run WQ_ALL_PATCH.sql in Supabase.\n\nDetails: ${reason}`
-            : `Could not save photo.\n\nDetails: ${reason}`,
+            ? `Storage bucket "avatars" is missing or not public. Ask the admin to run WQ_ALL_PATCH.sql in Supabase. Details: ${reason}`
+            : `Could not save photo. Details: ${reason}`,
         );
       }
     } catch (e) { setUploading(false); Alert.alert('Error', e.message); }
@@ -87,7 +88,7 @@ export default function AvatarScreen({ navigation }) {
       <View style={styles.tint} />
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>🎨 Custom Avatar</Text>
@@ -100,7 +101,13 @@ export default function AvatarScreen({ navigation }) {
             <View style={[styles.avatarRing, { borderColor }]}>
               <View style={[styles.avatarFill, { backgroundColor: photoUrl ? '#0f172a' : color }]}>
                 {photoUrl
-                  ? <Image source={{ uri: photoUrl }} style={styles.avatarPhoto} />
+                  ? (
+                    <Image
+                      source={{ uri: photoUrl }}
+                      style={styles.avatarPhoto}
+                      onError={() => { setPhotoUrl(null); }}
+                    />
+                  )
                   : <Text style={styles.avatarEmoji}>{emoji}</Text>}
               </View>
             </View>
@@ -123,7 +130,7 @@ export default function AvatarScreen({ navigation }) {
           <Text style={styles.section}>OR PICK AN AVATAR</Text>
           <View style={styles.grid}>
             {AVATAR_EMOJIS.map((e) => (
-              <TouchableOpacity key={e} onPress={() => { setEmoji(e); setPhotoUrl(null); }} style={[styles.cell, emoji === e && !photoUrl && styles.cellActive]}>
+              <TouchableOpacity key={e} activeOpacity={0.7} onPress={() => { setEmoji(e); setPhotoUrl(null); }} style={[styles.cell, emoji === e && !photoUrl && styles.cellActive]}>
                 <Text style={styles.cellEmoji}>{e}</Text>
               </TouchableOpacity>
             ))}
@@ -132,14 +139,14 @@ export default function AvatarScreen({ navigation }) {
           <Text style={styles.section}>COLOR</Text>
           <View style={styles.gridSmall}>
             {COLORS.map((c) => (
-              <TouchableOpacity key={c} onPress={() => setColor(c)} style={[styles.colorDot, { backgroundColor: c }, color === c && styles.colorDotActive]} />
+              <TouchableOpacity key={c} activeOpacity={0.7} onPress={() => setColor(c)} style={[styles.colorDot, { backgroundColor: c }, color === c && styles.colorDotActive]} />
             ))}
           </View>
 
           <Text style={styles.section}>NAMEPLATE BORDER</Text>
           <View style={styles.borderRow}>
             {BORDERS.map((b) => (
-              <TouchableOpacity key={b.key} onPress={() => setBorder(b.key)} style={[styles.borderChip, { borderColor: b.color }, border === b.key && { backgroundColor: b.color }]}>
+              <TouchableOpacity key={b.key} activeOpacity={0.7} onPress={() => setBorder(b.key)} style={[styles.borderChip, { borderColor: b.color }, border === b.key && { backgroundColor: b.color }]}>
                 <Text style={[styles.borderChipText, border === b.key && { color: '#0f172a' }]}>{b.name}</Text>
               </TouchableOpacity>
             ))}
@@ -167,17 +174,17 @@ const styles = StyleSheet.create({
   scroll: { padding: 14 },
   preview: { alignItems: 'center', marginVertical: 12 },
   avatarRing: {
-    width: 130, height: 130, borderRadius: 65,
+    width: rs(130), height: rs(130), borderRadius: rs(65),
     borderWidth: 5,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.3)',
   },
   avatarFill: {
-    width: 110, height: 110, borderRadius: 55,
+    width: rs(110), height: rs(110), borderRadius: rs(55),
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
     borderWidth: 2, borderColor: '#fff',
   },
-  avatarEmoji: { fontSize: 60 },
+  avatarEmoji: { fontSize: rfs(60) },
   avatarPhoto: { width: '100%', height: '100%' },
   previewName: { color: '#fff', fontSize: 13, fontWeight: '800', marginTop: 8, opacity: 0.85 },
 
@@ -196,15 +203,15 @@ const styles = StyleSheet.create({
   },
   removeText: { color: '#fff', fontSize: 18, fontWeight: '900' },
 
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: IS_SMALL ? 'space-between' : 'flex-start' },
   cell: {
-    width: 48, height: 48, borderRadius: 12,
+    width: IS_SMALL ? wp(15) : rs(50), height: IS_SMALL ? wp(15) : rs(50), borderRadius: 12,
     backgroundColor: 'rgba(15,23,42,0.7)',
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: 'transparent',
   },
   cellActive: { borderColor: '#facc15' },
-  cellEmoji: { fontSize: 26 },
+  cellEmoji: { fontSize: rfs(26) },
 
   gridSmall: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   colorDot: { width: 40, height: 40, borderRadius: 20, borderWidth: 3, borderColor: 'transparent' },

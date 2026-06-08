@@ -1,6 +1,7 @@
 // rewardAgent.js — badges + AI-generated encouragement (OpenAI gpt-4o-mini).
 
 const { generate, isConfigured } = require('../utils/llm');
+const { guardText } = require('../utils/guardrailRunner');
 
 function evalBadges({ wordsFound, totalWords, timeLeft, score, roundNumber, streak }) {
   const badges = [];
@@ -41,9 +42,13 @@ Return STRICTLY valid JSON only:
     const jsonStart = cleaned.indexOf('{');
     const jsonEnd = cleaned.lastIndexOf('}');
     const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
+    // SAFETY GUARDRAIL — strip encouragement / preview text that fails
+    // the kid-safety check (rare on this agent but kept for consistency).
+    const safeEnc = await guardText(String(parsed.encouragement || ''), 'tutor', { ageGroup: 'kid' });
+    const safeNext = await guardText(String(parsed.nextRoundPreview || ''), 'tutor', { ageGroup: 'kid' });
     return {
-      encouragement: String(parsed.encouragement || ''),
-      nextRoundPreview: String(parsed.nextRoundPreview || ''),
+      encouragement: safeEnc || '',
+      nextRoundPreview: safeNext || '',
     };
   } catch (err) {
     return { encouragement: '', nextRoundPreview: '' };

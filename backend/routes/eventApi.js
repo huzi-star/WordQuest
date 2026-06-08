@@ -22,6 +22,8 @@ const VALID_CATEGORIES = new Set([
   'daily-word',       // daily challenge word found
   'daily-result',     // daily challenge finished (pass/fail)
   'quick-play',       // quick play round started / ended
+  'quick-play-fail',  // quick play round failed (timer out / quit) → -20 penalty
+  'practice',         // practice mode rounds (unranked, AI-adaptive)
   'level-complete',   // numbered level completed
   'battle-queue',     // battle queue joined
   'battle-result',    // battle finished (win/loss)
@@ -60,7 +62,15 @@ router.post('/api/event', (req, res) => {
       durationMs: Number(durationMs) || 0,
       prompt: summary,
       response: JSON.stringify({ userId, action, ...data }, null, 2),
-      meta: { category, action, userId },
+      meta: {
+        category,
+        action,
+        userId,
+        tool: 'Mobile telemetry (fire-and-forget POST /api/event)',
+        decision: action ? `event "${category}" · action="${action}"` : `event "${category}"`,
+        reason: 'Mobile client emitted this milestone event so the admin dashboard can show real-time player activity.',
+        fallback: false,
+      },
     });
 
     res.json({ ok: true });

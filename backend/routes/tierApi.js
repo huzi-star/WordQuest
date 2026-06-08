@@ -140,9 +140,9 @@ router.get('/api/tier-leaderboard/:tier', async (req, res) => {
 });
 
 router.post('/api/word-detail', async (req, res) => {
-  const { word, tier } = req.body || {};
+  const { word, tier, category, userId } = req.body || {};
   if (!word) return res.status(400).json({ ok: false, error: 'word required' });
-  const detail = await wordDetailAgent({ word, tier });
+  const detail = await wordDetailAgent({ word, tier, category, userId });
   res.json({ ok: true, detail });
 });
 

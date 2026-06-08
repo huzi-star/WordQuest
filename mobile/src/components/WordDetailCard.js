@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ActivityIndicator, Animated, Easing, ScrollView } from 'react-native';
 import * as Speech from 'expo-speech';
-import { fetchWordDetail, translateMeaning } from '../utils/api';
+import { fetchWordDetail, translateMeaning, pkQuestNote } from '../utils/api';
 
 const LANGS = [
   { key: 'urdu', label: 'اردو' },
@@ -25,29 +25,156 @@ const PALETTE = {
 // One-shot in-memory cache so repeat-finding the same word never re-hits the API.
 const cache = new Map();
 
-export default function WordDetailCard({ visible, word, tier = 'bronze', onClose }) {
+export default function WordDetailCard({ visible, word, tier = 'bronze', onClose, langs = null, category = '', userId = null }) {
+  // Optional `langs` prop = array of language KEYS (matching LANGS[].key) to
+  // restrict the translation toggles. Default = full set. Pakistan Quest
+  // passes `['urdu']` so the player only sees the English meaning + a
+  // single Urdu (Nastaliq) translation toggle.
+  const availableLangs = Array.isArray(langs) && langs.length
+    ? LANGS.filter((L) => langs.includes(L.key))
+    : LANGS;
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [translation, setTranslation] = useState(null);
+  // Holds translated copies of EVERY visible field in the selected
+  // language, so when the user taps the speaker the audio matches the
+  // language they picked from top to bottom. Cleared whenever the
+  // language changes or the card closes.
+  const [translatedAll, setTranslatedAll] = useState(null);
   const [activeLang, setActiveLang] = useState(null);
   const [translating, setTranslating] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const scale = useRef(new Animated.Value(0.8)).current;
   const fade = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(1)).current;
+  const pulseLoop = useRef(null);
 
-  function speak(text) {
-    try { Speech.stop(); Speech.speak(String(text || ''), { language: 'en-US', rate: 0.9, pitch: 1.05 }); } catch (_) {}
+  function stopSpeech() {
+    try { Speech.stop(); } catch (_) {}
+    setSpeaking(false);
+  }
+
+  // Map a language toggle key → the BCP-47 / device-TTS locale to speak in.
+  // The default tab (no active language) is English and uses en-US.
+  const SPEAK_LOCALE = {
+    urdu:    'ur-PK',
+    hindi:   'hi-IN',
+    arabic:  'ar-SA',
+    spanish: 'es-ES',
+    french:  'fr-FR',
+  };
+
+  function speakAll() {
+    if (speaking) return;
+    const w = String(word || '').trim();
+    if (!w) return;
+
+    // Decide WHAT to speak + WHICH voice to use based on the currently
+    // active language tab. Urdu tab → speak the Urdu translation with
+    // ur-PK voice. English tab (no active toggle) → read the full
+    // English card.
+    let textToSpeak = '';
+    let locale = 'en-US';
+    if (activeLang) {
+      // Speak EVERY visible field in the selected language. If batch
+      // translations have come back, use them; otherwise fall back to
+      // just the translated meaning we already have.
+      const t = translatedAll || {};
+      const parts = [w + '.'];
+      if (t.meaning || translation) parts.push(String(t.meaning || translation).trim() + '.');
+      if (t.example) parts.push(String(t.example).replace(/[“”"]/g, '').trim() + '.');
+      if (t.synonym) parts.push(String(t.synonym).trim() + '.');
+      if (t.antonym) parts.push(String(t.antonym).trim() + '.');
+      textToSpeak = parts.join(' ');
+      locale = SPEAK_LOCALE[activeLang] || 'en-US';
+    } else {
+      const parts = [w + '.'];
+      if (detail?.meaning) parts.push('Meaning. ' + String(detail.meaning).replace(/\s+/g, ' ').trim() + '.');
+      if (detail?.example) parts.push('Example. ' + String(detail.example).replace(/[“”"]/g, '').replace(/\s+/g, ' ').trim() + '.');
+      if (detail?.synonym) parts.push('Synonym. ' + String(detail.synonym).trim() + '.');
+      if (detail?.antonym) parts.push('Antonym. ' + String(detail.antonym).trim() + '.');
+      textToSpeak = parts.join(' ');
+      locale = 'en-US';
+    }
+
+    try {
+      Speech.stop();
+      setSpeaking(true);
+      Speech.speak(textToSpeak, {
+        language: locale,
+        // Non-Latin scripts (Urdu / Arabic) sound clearer a touch slower.
+        rate: (locale === 'ur-PK' || locale === 'ar-SA') ? 0.78 : 0.88,
+        // Slightly raised pitch produces a warmer, more feminine timbre
+        // on Android even when only one OEM voice is installed.
+        pitch: 1.18,
+        onDone: () => setSpeaking(false),
+        onStopped: () => setSpeaking(false),
+        onError: () => setSpeaking(false),
+      });
+    } catch (_) { setSpeaking(false); }
+  }
+
+  function handleContinue() {
+    stopSpeech();
+    onClose && onClose();
   }
 
   async function pickLang(langKey) {
     if (!detail?.meaning) return;
-    if (activeLang === langKey) { setActiveLang(null); setTranslation(null); return; }
+    // Always halt any in-flight TTS the moment the user changes language —
+    // otherwise the speaker keeps reading the previous-language audio.
+    stopSpeech();
+    if (activeLang === langKey) {
+      setActiveLang(null); setTranslation(null); setTranslatedAll(null); return;
+    }
     setActiveLang(langKey);
     setTranslation(null);
+    setTranslatedAll(null);
     setTranslating(true);
-    const r = await translateMeaning({ word, meaning: detail.meaning, language: langKey });
-    setTranslating(false);
-    if (r?.ok && r.translation) setTranslation(r.translation);
+    // Translate EVERY visible field in parallel — so when the speaker is
+    // tapped the audio matches the language for the whole card, not just
+    // the meaning line. The headline "translation" state stays for the
+    // visible meaning text; translatedAll backs the speaker.
+    const tasks = [];
+    if (detail.meaning) tasks.push(translateMeaning({ word, meaning: detail.meaning, language: langKey }).then((r) => ['meaning', r?.translation || '']));
+    if (detail.example) tasks.push(translateMeaning({ word, meaning: detail.example, language: langKey }).then((r) => ['example', r?.translation || '']));
+    if (detail.synonym) tasks.push(translateMeaning({ word, meaning: detail.synonym, language: langKey }).then((r) => ['synonym', r?.translation || '']));
+    if (detail.antonym) tasks.push(translateMeaning({ word, meaning: detail.antonym, language: langKey }).then((r) => ['antonym', r?.translation || '']));
+    try {
+      const results = await Promise.all(tasks);
+      const bundle = {};
+      for (const [k, v] of results) bundle[k] = v;
+      setTranslating(false);
+      if (bundle.meaning) setTranslation(bundle.meaning);
+      setTranslatedAll(bundle);
+    } catch (_) {
+      setTranslating(false);
+    }
   }
+
+  // Always halt any speech the moment the card hides or unmounts.
+  useEffect(() => {
+    if (!visible) stopSpeech();
+  }, [visible]);
+  useEffect(() => {
+    return () => { try { Speech.stop(); } catch (_) {} };
+  }, []);
+
+  // Pulse the speaker button while TTS is playing.
+  useEffect(() => {
+    if (speaking) {
+      pulseLoop.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1.18, duration: 380, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1.0, duration: 380, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        ])
+      );
+      pulseLoop.current.start();
+    } else {
+      if (pulseLoop.current) pulseLoop.current.stop();
+      pulse.setValue(1);
+    }
+  }, [speaking]); // eslint-disable-line
 
   useEffect(() => {
     if (!visible || !word) return;
@@ -61,12 +188,21 @@ export default function WordDetailCard({ visible, word, tier = 'bronze', onClose
       setDetail(null);
       setLoading(true);
       (async () => {
-        const r = await fetchWordDetail(word, tier);
+        const r = await fetchWordDetail(word, tier, category, userId);
         const d = r?.detail || null;
         if (d) cache.set(key, d);
         setDetail(d);
         setLoading(false);
       })();
+    }
+    // Pakistan Quest path — when the card opens in PK Quest mode the
+    // pakistanTutorAgent fires for a curated bilingual note. Fire-and-
+    // forget so the card never blocks on it; the result is logged into
+    // the admin pipeline regardless of whether the UI consumes it.
+    if (Array.isArray(langs) && langs.includes('urdu') && word) {
+      try {
+        pkQuestNote(String(word).toLowerCase(), 'en').catch(() => {});
+      } catch (_) {}
     }
     scale.setValue(0.85);
     fade.setValue(0);
@@ -79,7 +215,15 @@ export default function WordDetailCard({ visible, word, tier = 'bronze', onClose
   if (!visible) return null;
 
   return (
-    <Modal transparent animationType="fade" onRequestClose={onClose} visible={visible}>
+    <Modal
+      transparent
+      animationType="fade"
+      visible={visible}
+      // The learning card must stay open until the user explicitly taps
+      // "Continue". Swallow the Android hardware-back press so it can't
+      // dismiss the card behind the user's back.
+      onRequestClose={() => {}}
+    >
       <Animated.View style={[styles.backdrop, { opacity: fade }]}>
         <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
           <View style={styles.headerBar}>
@@ -88,8 +232,15 @@ export default function WordDetailCard({ visible, word, tier = 'bronze', onClose
           </View>
           <View style={styles.wordRow}>
             <Text style={styles.word}>{String(word || '').toUpperCase()}</Text>
-            <TouchableOpacity onPress={() => speak(word)} style={styles.speakBtn} activeOpacity={0.75}>
-              <Text style={styles.speakIcon}>🔊</Text>
+            <TouchableOpacity
+              onPress={speakAll}
+              disabled={speaking || loading}
+              style={[styles.speakBtn, speaking && styles.speakBtnActive]}
+              activeOpacity={0.75}
+            >
+              <Animated.Text style={[styles.speakIcon, { transform: [{ scale: pulse }] }]}>
+                {speaking ? '📢' : '🔊'}
+              </Animated.Text>
             </TouchableOpacity>
           </View>
           {loading ? (
@@ -127,7 +278,23 @@ export default function WordDetailCard({ visible, word, tier = 'bronze', onClose
             <View style={styles.translateBlock}>
               <Text style={styles.translateLabel}>SEE MEANING IN YOUR LANGUAGE</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                {LANGS.map((L) => (
+                {/* Explicit English pill — lets the player flip back to the
+                    English meaning at any time. Active when no language
+                    toggle is selected. */}
+                <TouchableOpacity
+                  onPress={() => {
+                    stopSpeech();
+                    setActiveLang(null);
+                    setTranslation(null);
+                  }}
+                  style={[
+                    styles.langPill,
+                    !activeLang && { backgroundColor: PALETTE.accent, borderColor: PALETTE.accent },
+                  ]}
+                >
+                  <Text style={[styles.langText, !activeLang && { color: '#0b1424' }]}>English</Text>
+                </TouchableOpacity>
+                {availableLangs.map((L) => (
                   <TouchableOpacity
                     key={L.key}
                     onPress={() => pickLang(L.key)}
@@ -150,7 +317,7 @@ export default function WordDetailCard({ visible, word, tier = 'bronze', onClose
               ) : null}
             </View>
           ) : null}
-          <TouchableOpacity style={styles.continue} onPress={onClose} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.continue} onPress={handleContinue} activeOpacity={0.85}>
             <Text style={styles.continueText}>Continue →</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -172,9 +339,9 @@ function Row({ icon, label, value, italic }) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(13,80,80,0.7)', alignItems: 'center', justifyContent: 'center', padding: 22 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(13,80,80,0.7)', alignItems: 'center', justifyContent: 'center', padding: 14 },
   card: {
-    width: '100%', maxWidth: 420,
+    width: '100%', maxWidth: 420, alignSelf: 'center',
     backgroundColor: 'rgba(15,23,42,0.95)',
     borderRadius: 24, padding: 20,
     borderWidth: 3, borderColor: '#fff',
@@ -208,6 +375,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#22c55e',
     borderWidth: 3, borderColor: '#fff',
     borderBottomWidth: 5, borderBottomColor: '#14532d',
+  },
+  speakBtnActive: {
+    backgroundColor: '#f59e0b',
+    borderColor: '#fde68a',
+    borderBottomColor: '#78350f',
+    shadowColor: '#f59e0b', shadowOpacity: 0.85, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 10,
   },
   speakIcon: { fontSize: 16 },
 

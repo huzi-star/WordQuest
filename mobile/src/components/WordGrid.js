@@ -12,7 +12,7 @@ function computeCell(gridSize) {
   return { CELL: Math.max(20, cell), CELL_WITH_MARGIN: Math.max(22, cell + 2) };
 }
 
-function Cell({ letter, sel, found, hinted, gold, justFound, delay, size, fontSize, popInDelay }) {
+function Cell({ letter, sel, found, foundColor, hinted, gold, justFound, delay, size, fontSize, popInDelay }) {
   const scale = useRef(new Animated.Value(0.4)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -39,7 +39,7 @@ function Cell({ letter, sel, found, hinted, gold, justFound, delay, size, fontSi
   const bg = sel
     ? '#22c55e'
     : found
-      ? '#166534'
+      ? (foundColor || '#166534')
       : hinted
         ? '#7c2d12'
         : gold
@@ -215,6 +215,10 @@ export default function WordGrid({
 
   const isSelected = (r, c) => selectedCells.some((s) => s.r === r && s.c === c);
   const isFound = (r, c) => foundCells.some((s) => s.r === r && s.c === c);
+  const foundColorAt = (r, c) => {
+    const hit = foundCells.find((s) => s.r === r && s.c === c);
+    return hit?.color || null;
+  };
   const isHinted = (r, c) => hintedCells.some((s) => s.r === r && s.c === c);
   const isGold = (r, c) => goldCells.some((s) => s.r === r && s.c === c);
   const justFoundIndex = (r, c) => justFoundCells.findIndex((s) => s.r === r && s.c === c);
@@ -271,6 +275,7 @@ export default function WordGrid({
                 letter={letter}
                 sel={sel}
                 found={found}
+                foundColor={foundColorAt(r, c)}
                 hinted={hinted}
                 gold={gold}
                 justFound={jfIdx >= 0}

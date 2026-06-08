@@ -25,15 +25,104 @@ function client() {
   return cached || null;
 }
 
+// Per-agent metadata: what TOOL each agent uses + whether it's expected
+// to call an LLM (so we can label fallbacks correctly when the LLM is
+// absent and local logic ran instead).
+const AGENT_TOOLING = {
+  difficultyAgent:      { tool: 'Local logic',           usesLLM: false },
+  levelGeneratorAgent:  { tool: 'OpenAI · gpt-4o-mini',  usesLLM: true  },
+  refereeAgent:         { tool: 'Local dictionary',      usesLLM: false },
+  rewardAgent:          { tool: 'Local logic',           usesLLM: false },
+  coachAgent:           { tool: 'OpenAI · gpt-4o-mini',  usesLLM: true  },
+  chaalbaazAgent:       { tool: 'OpenAI · gpt-4o-mini',  usesLLM: true  },
+  commentatorAgent:     { tool: 'OpenAI · gpt-4o-mini',  usesLLM: true  },
+  tutorAgent:           { tool: 'OpenAI · gpt-4o-mini',  usesLLM: true  },
+  wordDetailAgent:      { tool: 'OpenAI · gpt-4o-mini',  usesLLM: true  },
+  wordOfDayAgent:       { tool: 'OpenAI · gpt-4o-mini',  usesLLM: true  },
+  translateAgent:       { tool: 'OpenAI · gpt-4o-mini',  usesLLM: true  },
+  quizAgent:            { tool: 'OpenAI · gpt-4o-mini',  usesLLM: true  },
+  kidQuestionAgent:     { tool: 'OpenAI · gpt-4o-mini',  usesLLM: true  },
+  kidWordAgent:         { tool: 'OpenAI · gpt-4o-mini',  usesLLM: true  },
+  lessonAgent:          { tool: 'OpenAI · gpt-4o-mini',  usesLLM: true  },
+  // guardrailAgent is fundamentally a local-rules agent (Layers 1-4 are
+  // deterministic blocklist + age caps + repeat detection — no LLM by
+  // design). Layer 5 is an OPTIONAL deep-review that runs only when the
+  // caller explicitly passes useLLM:true. Marking usesLLM:false here
+  // prevents the dashboard's derivedFallback heuristic from labelling
+  // the (correct, primary, Layer-1-4) path as a fallback failure.
+  guardrailAgent:       { tool: 'Local rules (Layers 1-4)', usesLLM: false },
+};
+
+// Best-effort reason extraction: agents that return a JSON response may
+// already include a "reason" / "why" / "explanation" field. Surface it.
+function extractReason(response) {
+  if (!response) return null;
+  try {
+    const obj = typeof response === 'string' ? JSON.parse(response) : response;
+    if (obj && typeof obj === 'object') {
+      const r = obj.reason || obj.why || obj.explanation || obj.rationale || obj.justification;
+      if (r) return String(r).slice(0, 220);
+    }
+  } catch (_) {}
+  return null;
+}
+
+// Home-screen / idle agents fire on every focus event. Without a throttle
+// the admin dashboard fills with duplicate wordOfDayAgent rows for a user
+// who is just sitting on the home tab. We coalesce those into a single
+// log per (userId, agent) per 60s. Live game agents (refereeAgent,
+// wordDetailAgent, chaalbaazAgent, etc.) are NEVER throttled — every
+// word found is a real, distinct event that must appear in the feed.
+const THROTTLE_AGENTS = new Set(['wordOfDayAgent']);
+const THROTTLE_MS = 60000;
+const recentLogTs = new Map();
+function shouldThrottle(agentName, userId) {
+  if (!THROTTLE_AGENTS.has(agentName) || !userId) return false;
+  const key = userId + '|' + agentName;
+  const now = Date.now();
+  const last = recentLogTs.get(key) || 0;
+  if (now - last < THROTTLE_MS) return true;
+  recentLogTs.set(key, now);
+  if (recentLogTs.size > 5000) {
+    for (const [k, t] of recentLogTs) {
+      if (now - t > THROTTLE_MS * 2) recentLogTs.delete(k);
+    }
+  }
+  return false;
+}
+
 async function insertLog(entry) {
   const sb = client();
   if (!sb) return;
   try {
+    const agentName = entry.agent || 'unknown';
+    const uid = (entry.meta && entry.meta.userId) || null;
+    if (shouldThrottle(agentName, uid)) return;
+    const tooling = AGENT_TOOLING[agentName] || { tool: 'Mixed / unknown', usesLLM: false };
+    // Derive fallback: if the agent is supposed to use the LLM but no
+    // model was recorded (OpenAI absent/down) we ran local logic instead.
+    const explicitFallback =
+      (entry.meta && (entry.meta.fallback === true || entry.meta.usedFallback === true)) ||
+      false;
+    const derivedFallback = tooling.usesLLM && !entry.model && entry.status === 'ok';
+    const fallback = explicitFallback || derivedFallback;
+    const reason =
+      (entry.meta && entry.meta.reason) ||
+      extractReason(entry.response) ||
+      (fallback ? 'LLM unavailable — local rule-based fallback ran.' : null);
+    // Enrich the meta JSON so the admin dashboard can read these without
+    // a schema change.
+    const enrichedMeta = {
+      ...(entry.meta || {}),
+      tool: (entry.meta && entry.meta.tool) || tooling.tool,
+      reason,
+      fallback,
+    };
     const row = {
       trace_id: entry.id,
-      agent: entry.agent || 'unknown',
+      agent: agentName,
       model: entry.model || null,
-      status: entry.status || 'ok',
+      status: entry.status || (fallback ? 'fallback' : 'ok'),
       duration_ms: entry.durationMs || 0,
       prompt_tokens: entry.tokens?.prompt || 0,
       completion_tokens: entry.tokens?.completion || 0,
@@ -41,7 +130,7 @@ async function insertLog(entry) {
       prompt: entry.prompt || null,
       response: entry.response || null,
       error: entry.error || null,
-      meta: entry.meta || null,
+      meta: enrichedMeta,
       created_at: entry.timestamp || new Date().toISOString(),
     };
     await sb.from('agent_logs').insert(row);

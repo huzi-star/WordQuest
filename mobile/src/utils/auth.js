@@ -105,6 +105,23 @@ export function AuthProvider({ children }) {
         const l = localCurrent.lastSeenTier || 'bronze';
         return rank(r) >= rank(l) ? r : l;
       })(),
+      // Practice Mode (unranked) — pulled from preferences blob. Keep
+      // the higher value between local and remote so progress isn't lost.
+      practiceHighScore: Math.max(
+        Number(remote.preferences?.practiceHighScore) || 0,
+        Number(localCurrent.practiceHighScore) || 0,
+      ),
+      practiceRoundsPlayed: Math.max(
+        Number(remote.preferences?.practiceRoundsPlayed) || 0,
+        Number(localCurrent.practiceRoundsPlayed) || 0,
+      ),
+      practiceRoundsWon: Math.max(
+        Number(remote.preferences?.practiceRoundsWon) || 0,
+        Number(localCurrent.practiceRoundsWon) || 0,
+      ),
+      practiceCurrentDifficulty:
+        remote.preferences?.practiceCurrentDifficulty ||
+        localCurrent.practiceCurrentDifficulty || 'easy',
       // Level retry word cache — local-only.
       levelWordCache: localCurrent.levelWordCache || {},
       // Per-level high scores: merge remote with local, taking the max

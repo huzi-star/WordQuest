@@ -75,7 +75,7 @@ export default function SettingsScreen({ navigation }) {
                     icon="💎"
                     title="Subscription"
                     subtitle="Manage your plan & view usage"
-                    right={<Text style={[styles.dangerArrow, { color: theme.accent }]}>→</Text>}
+                    right={<Text style={[styles.dangerArrow, { color: theme.accent }]}>›</Text>}
                   />
                 </TouchableOpacity>
                 <View style={styles.divider} />
@@ -84,7 +84,7 @@ export default function SettingsScreen({ navigation }) {
                     icon="👑"
                     title="Pro Max Features"
                     subtitle="Tutor · Parent Dashboard · Avatar"
-                    right={<Text style={[styles.dangerArrow, { color: theme.accent }]}>→</Text>}
+                    right={<Text style={[styles.dangerArrow, { color: theme.accent }]}>›</Text>}
                   />
                 </TouchableOpacity>
                 <View style={styles.divider} />
@@ -93,7 +93,7 @@ export default function SettingsScreen({ navigation }) {
                     icon="🔐"
                     title="Change Password"
                     subtitle="Update your account password"
-                    right={<Text style={[styles.dangerArrow, { color: theme.accent }]}>→</Text>}
+                    right={<Text style={[styles.dangerArrow, { color: theme.accent }]}>›</Text>}
                   />
                 </TouchableOpacity>
                 <View style={styles.divider} />
@@ -106,7 +106,7 @@ export default function SettingsScreen({ navigation }) {
                     );
                   }}
                 >
-                  <Row icon="🚪" title="Sign out" subtitle="Back to login screen" right={<Text style={styles.dangerArrow}>→</Text>} />
+                  <Row icon="🚪" title="Sign out" subtitle="Back to login screen" right={<Text style={styles.dangerArrow}>›</Text>} />
                 </TouchableOpacity>
               </>
             ) : (
@@ -115,7 +115,7 @@ export default function SettingsScreen({ navigation }) {
                   icon="🔐"
                   title="Login or Sign up"
                   subtitle="Stats sync across devices when logged in"
-                  right={<Text style={[styles.dangerArrow, { color: theme.accent }]}>→</Text>}
+                  right={<Text style={[styles.dangerArrow, { color: theme.accent }]}>›</Text>}
                 />
               </TouchableOpacity>
             )}
@@ -170,7 +170,7 @@ export default function SettingsScreen({ navigation }) {
         visible={resetOpen}
         icon="🗑"
         title="Reset All Stats?"
-        message="All scores, streaks, badges, level progress, and category mastery will be permanently erased. Daily Challenge and Quiz cooldowns will be preserved. This cannot be undone."
+        message="All scores, streaks, badges, level progress, and category mastery will be permanently erased. This cannot be undone."
         cancelText="Cancel"
         confirmText="Reset"
         confirmVariant="danger"
@@ -181,7 +181,7 @@ export default function SettingsScreen({ navigation }) {
         visible={resetDoneOpen}
         icon="✅"
         title="Stats Reset"
-        message="Your gameplay stats have been wiped. Daily Challenge and Quiz Mode are untouched."
+        message="Your gameplay stats have been wiped."
         cancelText="Close"
         confirmText="Got it"
         onCancel={() => setResetDoneOpen(false)}

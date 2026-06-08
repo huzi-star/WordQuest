@@ -1,0 +1,533 @@
+<!doctype html>
+<html><head><meta charset="utf-8"/>
+<title>WordQuest — AI Agent Reference</title>
+<style>
+  @page { margin: 20mm 18mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color:#1f2937; line-height:1.55; font-size:11.5pt; }
+  h1 { font-size:26pt; color:#0f766e; border-bottom:3px solid #0d9488; padding-bottom:8px; margin-top:0; }
+  h2 { font-size:17pt; color:#0c4a6e; margin-top:28px; border-left:4px solid #0ea5e9; padding-left:10px; }
+  h3 { font-size:13pt; color:#374151; margin-top:18px; }
+  h4 { font-size:11.5pt; color:#475569; margin-top:14px; }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0 10px 22px; }
+  li { margin: 3px 0; }
+  code { background:#f1f5f9; color:#be185d; padding:1px 5px; border-radius:4px; font-family:"Consolas","Courier New",monospace; font-size:0.92em; }
+  pre { background:#0f172a; color:#e2e8f0; padding:12px 16px; border-radius:8px; overflow-x:auto; font-size:0.92em; }
+  pre code { background:transparent; color:inherit; padding:0; }
+  a { color:#0369a1; text-decoration:none; border-bottom:1px dotted #0369a1; }
+  blockquote { border-left:4px solid #f59e0b; background:#fffbeb; padding:8px 14px; margin:10px 0; color:#78350f; border-radius:4px; }
+  hr { border:none; border-top:1px solid #cbd5e1; margin:24px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 10.5pt; }
+  th { background:#0f766e; color:#fff; padding:8px 10px; text-align:left; border:1px solid #134e4a; }
+  td { padding:7px 10px; border:1px solid #cbd5e1; vertical-align: top; }
+  tr:nth-child(even) td { background:#f8fafc; }
+  strong { color:#0f172a; }
+</style></head><body>
+<h1>WordQuest — AI Agent Reference</h1>
+
+<blockquote>
+<p>A complete, current-state reference for every AI / logic agent powering WordQuest.</p>
+<p>Each section explains <strong>what the agent does</strong>, <strong>where it is wired up</strong>, and <strong>what the player actually sees</strong> as a result.</p>
+</blockquote>
+
+<hr/>
+
+<h2>Quick Map</h2>
+
+<table><thead><tr>
+<th>#</th>
+<th>Agent</th>
+<th>Type</th>
+<th>Lives In</th>
+<th>Triggered By</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td>levelGeneratorAgent</td>
+<td>LLM (gpt-4o-mini)</td>
+<td><code>agents/levelGeneratorAgent.js</code></td>
+<td>Quick Play, Daily Challenge, Practice, 1v1 Battle, Pakistan Quest</td>
+</tr>
+<tr>
+<td>2</td>
+<td>difficultyAgent</td>
+<td>Pure logic</td>
+<td><code>agents/difficultyAgent.js</code></td>
+<td>Quick Play (legacy fallback only)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>refereeAgent</td>
+<td>Pure logic</td>
+<td><code>agents/refereeAgent.js</code></td>
+<td>Word selection validation (server-side)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>rewardAgent</td>
+<td>Pure logic</td>
+<td><code>agents/rewardAgent.js</code></td>
+<td>Round-complete score breakdown</td>
+</tr>
+<tr>
+<td>5</td>
+<td>tutorAgent</td>
+<td>LLM</td>
+<td><code>agents/tutorAgent.js</code></td>
+<td>"Explain this word" + AI Tutor screen</td>
+</tr>
+<tr>
+<td>6</td>
+<td>commentatorAgent</td>
+<td>LLM</td>
+<td><code>agents/commentatorAgent.js</code></td>
+<td>Endpoint exists, mobile now uses local templates</td>
+</tr>
+<tr>
+<td>7</td>
+<td>coachAgent</td>
+<td>LLM</td>
+<td><code>agents/coachAgent.js</code></td>
+<td>Game Over coach tip</td>
+</tr>
+<tr>
+<td>8</td>
+<td>chaalbaazAgent</td>
+<td>Hybrid (logic + LLM)</td>
+<td><code>agents/chaalbaazAgent.js</code></td>
+<td>Quick Play, Practice — difficulty escalation</td>
+</tr>
+<tr>
+<td>9</td>
+<td>quizAgent</td>
+<td>LLM</td>
+<td><code>agents/quizAgent.js</code></td>
+<td>Quiz mode</td>
+</tr>
+<tr>
+<td>10</td>
+<td>wordDetailAgent</td>
+<td>LLM</td>
+<td><code>agents/wordDetailAgent.js</code></td>
+<td>Word Found card (meaning + example + syn/ant)</td>
+</tr>
+<tr>
+<td>11</td>
+<td>wordOfDayAgent</td>
+<td>LLM</td>
+<td><code>agents/wordOfDayAgent.js</code></td>
+<td>Home screen banner</td>
+</tr>
+<tr>
+<td>12</td>
+<td>translateAgent</td>
+<td>LLM</td>
+<td><code>agents/translateAgent.js</code></td>
+<td>Word detail translation button</td>
+</tr>
+<tr>
+<td>13</td>
+<td>lessonAgent</td>
+<td>LLM</td>
+<td><code>agents/lessonAgent.js</code></td>
+<td>Learn tab lesson screens</td>
+</tr>
+<tr>
+<td>14</td>
+<td>learningPathAgent</td>
+<td>Stateful logic + Supabase</td>
+<td><code>agents/learningPathAgent.js</code></td>
+<td>Home "Recommended for You" + after every round</td>
+</tr>
+<tr>
+<td>15</td>
+<td>guardrailAgent</td>
+<td>Pure logic</td>
+<td><code>agents/guardrailAgent.js</code></td>
+<td>Safety pass on AI output (kids mode strict)</td>
+</tr>
+<tr>
+<td>16</td>
+<td>kidWordAgent</td>
+<td>LLM</td>
+<td><code>agents/kidWordAgent.js</code></td>
+<td>Kids mode levels</td>
+</tr>
+<tr>
+<td>17</td>
+<td>kidQuestionAgent</td>
+<td>LLM</td>
+<td><code>agents/kidQuestionAgent.js</code></td>
+<td>Kids mode questions</td>
+</tr>
+</tbody></table>
+
+<hr/>
+
+<h2>1. levelGeneratorAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>Generates the actual word-search puzzle: an N × N grid of letters with target words placed horizontally, vertically, or diagonally (forwards or backwards). It picks the category, the words themselves, an emoji for the category, and a short fun fact.</p>
+
+<p><strong>Inputs</strong>: difficulty (easy / medium / hard), grid size, word count, language (English / Urdu), optional category override (Pakistan Quest pack, Practice mode), optional tier hints for CEFR-aligned word style.</p>
+
+<p><strong>Outputs</strong>: <code>{ category, categoryEmoji, words[], grid[][], wordPositions[], funFact }</code></p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li><strong>Quick Play</strong> — every round at <code>POST /api/generate-level</code></li>
+<li><strong>Daily Challenge</strong> — same endpoint with <code>dailySeed</code> parameter for stable daily puzzles</li>
+<li><strong>Practice Mode</strong> — <code>POST /api/practice/round</code> (category forced from a curated pool)</li>
+<li><strong>1v1 Battle</strong> — <code>POST /api/battle/queue</code> generates a single shared level for both players</li>
+<li><strong>Pakistan Quest</strong> — <code>POST /api/pakistan-quest/level</code> uses curated Pakistani vocabulary</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>The actual grid, the highlighted target words list, the category banner, the fun-fact ribbon at the bottom of the result screen.</p>
+
+<hr/>
+
+<h2>2. difficultyAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>Pure logic (no LLM call) that decides difficulty parameters (grid size, word count, time limit) from rolling player stats. Returns one of easy / medium / hard plus the numeric settings.</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li><strong>Quick Play legacy fallback</strong> in <code>server.js</code> — only fires when no tier is supplied. Modern Quick Play uses the player's <strong>tier</strong> as the source of truth, so this is the fallback path.</li>
+<li><strong>Level Mode</strong> — uses the same agent indexed by <code>levelNumber</code> to pull a locked difficulty table.</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>Indirectly — the grid size and timer they get. They never see this agent's reasoning string.</p>
+
+<hr/>
+
+<h2>3. refereeAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>Pure logic. Given the player's selected letter sequence and the target word list, decides whether the selection is a valid word find. Handles forward + reverse + all 8 directions.</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li><code>POST /api/validate-word</code> — called every time the player completes a swipe across the grid in Quick Play / Daily / Level mode.</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>The instant "found!" animation + score popup OR the shake-rejection on a wrong selection.</p>
+
+<hr/>
+
+<h2>4. rewardAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>Pure logic. After a round, takes the words found, time left, hints used, perfect-clear flag, and produces the final score breakdown: base points, bonuses, penalties.</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li><code>POST /api/round-complete</code> — fires from <code>RoundCompleteScreen.js</code> after every Quick Play / Daily / Level round.</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>The score breakdown card on the round-complete screen: "Words found", "Completion %", "Penalty", "New total".</p>
+
+<blockquote>
+<p>Note: Current scoring also runs client-side via <code>letters + 2</code> base formula and <code>+25</code> perfect-clear bonus. The reward agent handles the canonical server-side tally.</p>
+</blockquote>
+
+<hr/>
+
+<h2>5. tutorAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>LLM-powered AI tutor. Two purposes:</p>
+<ol>
+<li><strong>Word explanation</strong> — give the meaning, example sentence, and a short lesson on a single word.</li>
+<li><strong>Free chat tutor</strong> — multi-turn AI Tutor conversation (Pro Max only, 30 messages / day cap).</li>
+</ol>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li><code>POST /api/explain-word</code> — wired in <code>GameScreen.js</code> when player taps "Explain" on a found word</li>
+<li><strong>AI Tutor Screen</strong> (<code>TutorScreen.js</code>) — chat interface with bobbing robot, daily cap counter, TTS speaker button</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>A clean explanation card in-game; or the full AI Tutor screen where they can ask follow-up questions and hear the tutor speak the reply.</p>
+
+<hr/>
+
+<h2>6. commentatorAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>LLM-powered live commentary lines for game events ("Nice combo!", "Halfway there!", "Watch the clock!").</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li>Endpoint <code>POST /api/commentary</code> still exists, but the <strong>mobile client no longer calls it</strong> — <code>GameScreen.js</code> uses local commentary templates for instant feedback (no network round-trip, no stacking lag). The agent is effectively <strong>dormant</strong> in production.</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>Local commentary popups during play. The LLM agent itself is currently bypassed.</p>
+
+<hr/>
+
+<h2>7. coachAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>LLM that reviews a finished round and produces one short coaching tip ("You found 7 / 10 — focus on diagonal scanning next time").</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li><code>POST /api/coach</code> — called from <code>GameOverScreen.js</code> after the player loses or runs out of time.</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>The "Coach says…" card on the Game Over screen.</p>
+
+<hr/>
+
+<h2>8. chaalbaazAgent (hybrid — recently revived)</h2>
+
+<p><strong>What it does</strong></p>
+<p>The in-game "adversary". Two modes:</p>
+<ul>
+<li><strong><code>tune</code> (pure logic)</strong> — When the player is dominating their current tier or difficulty (streak ≥ 5 OR average 80%+ words found with time to spare), Chaalbaaz <strong>bumps the difficulty one step</strong>: +1 word, –10 sec, +1 grid cell. Never downgrades.</li>
+<li><strong><code>chat</code> (LLM)</strong> — English banter persona ("witty, slightly cocky, never insults"). Powers the standalone ChaalbaazChatScreen.</li>
+</ul>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li><strong>Quick Play</strong> (<code>server.js</code> — tier branch) — tier sets the base difficulty, Chaalbaaz can escalate on top</li>
+<li><strong>Practice Mode</strong> (<code>practiceApi.js</code>) — same escalation on top of the difficulty selector</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>The red "<strong>😏 ADVERSARY ACTIVATED</strong>" banner above the puzzle, with a one-line reason ("Streak of 6 — Chaalbaaz cranked up the heat."). The actual grid is bigger / harder.</p>
+
+<hr/>
+
+<h2>9. quizAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>LLM that generates a 20-question multiple-choice vocabulary quiz tailored to the player's tier / level. Each question has a correct answer + 3 plausible distractors + a short explanation.</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li><code>POST /api/generate-quiz</code> — fired by <strong>QuizScreen.js</strong> at quiz start.</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>The full Quiz mode: question card, four options, instant correct/wrong feedback, final score screen with percentage.</p>
+
+<hr/>
+
+<h2>10. wordDetailAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>LLM that returns the rich detail for a single word: meaning, example sentence, synonym, antonym, optional translation.</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li>Routed via <code>tierApi.js</code> — called whenever the <strong>Word Found card</strong> appears (Quick Play, Daily, Level, Practice).</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>The card that pops up when they find a word, containing meaning + example + synonym + antonym. The full TTS read-aloud (speak everything in sequence) reads from this payload.</p>
+
+<hr/>
+
+<h2>11. wordOfDayAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>LLM that picks <strong>one word of the day</strong> with meaning + example + audio prompt, calibrated to the player's tier (Bronze gets simple words, Master gets advanced).</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li>Routed via <code>tierApi.js</code> — called once on <strong>HomeScreen</strong> load.</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>The "Word of the Day" banner card on the Home screen, with a speaker button to hear it read aloud.</p>
+
+<hr/>
+
+<h2>12. translateAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>LLM translator. Converts an English word/phrase into Urdu (Nastaliq script) and Roman Urdu.</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li>Routed via <code>tierApi.js</code> — used by <strong>Word Detail card</strong> when the player taps the translation toggle.</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>Urdu / Roman Urdu translation appearing alongside the English meaning.</p>
+
+<hr/>
+
+<h2>13. lessonAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>LLM that generates a structured lesson for the <strong>Learn</strong> tab: introductory text, key vocabulary, a short story / dialogue, and 3 practice questions.</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li>Mounted in <code>learnApi.js</code> — powers Lesson screens of the Learn path.</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>The Lesson detail page in the Learn flow — title, intro paragraph, highlighted vocab, story, and practice questions at the bottom.</p>
+
+<hr/>
+
+<h2>14. learningPathAgent (Personalized Learning Path)</h2>
+
+<p><strong>What it does</strong></p>
+<p>A <strong>stateful</strong> agent that maintains a per-player memory blob in Supabase (<code>wq_player_memory</code>). After every round it:</p>
+<ul>
+<li>Updates rolling <strong>EMA</strong> metrics (avg score, avg words found, completion rate, time pressure, hint usage, diagonal speed, quiz accuracy)</li>
+<li>Tracks per-category accuracy</li>
+<li>Detects <strong>weaknesses</strong> (slow diagonals, hint overuse, low completion, time pressure, low quiz accuracy, weak categories)</li>
+<li>Generates a <strong>next-3 recommendation</strong> prescription tied to those weaknesses</li>
+</ul>
+
+<p>When the home screen loads it returns the latest recommendations. <strong>Cold start is tier-aware</strong>: a new Elite-tier player gets Master Tier Climb / 1v1 / AI Tutor Deep Dive — <em>not</em> "Warm-up Practice".</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li><code>POST /api/learning/session</code> — RoundCompleteScreen, QuizScreen, PracticeScreen all call this after a finished round</li>
+<li><code>GET /api/learning/recommendations/:userId?tier=elite</code> — HomeScreen fetches on focus</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>The <strong>🧠 RECOMMENDED FOR YOU</strong> card on Home, with weakness chips (<code>⚠ Poor quiz accuracy</code>, <code>⚠ Slow at diagonal words</code>) and three numbered, tappable prescriptions, each routing to the right mode (Tutor / Quiz / Practice / 1v1 / Quick Play).</p>
+
+<hr/>
+
+<h2>15. guardrailAgent (Safety Layer)</h2>
+
+<p><strong>What it does</strong></p>
+<p>Pure-logic 5-layer safety filter that screens any AI output before it reaches the player. Layers:</p>
+<ol>
+<li>Blocked terms (profanity, violence, NSFW)</li>
+<li>Kid-mode strict block list (additional terms)</li>
+<li>Always-block topics (regardless of mode)</li>
+<li>Difficulty cap per age group</li>
+<li>Final allow / block split with a reason string</li>
+</ol>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li><code>POST /api/guardrail/check</code> — direct probe endpoint</li>
+<li>Conceptually a wrapper that every AI agent's response can be passed through. In kid mode it runs strictly.</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>Nothing visible when it passes. If content is blocked, the player gets a generic safe replacement / category swap. The block reason is logged to the admin Monitoring Dashboard.</p>
+
+<hr/>
+
+<h2>16. kidWordAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>LLM specialized for very young learners. Picks age-appropriate easy words (3–5 letters) for a chosen category, with friendly category emojis.</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li>Mounted in <code>kidsApi.js</code> — drives Kids Mode levels.</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>Kid-mode puzzles where every word is age-safe and short.</p>
+
+<hr/>
+
+<h2>17. kidQuestionAgent</h2>
+
+<p><strong>What it does</strong></p>
+<p>LLM that generates simple multiple-choice questions for Kids mode (e.g. "Which one is a fruit? 🍎 🚗 🐶 ⚽").</p>
+
+<p><strong>Where it is used</strong></p>
+<ul>
+<li>Mounted in <code>kidsApi.js</code> — drives Kids Mode quizzes.</li>
+</ul>
+
+<p><strong>What the player sees</strong></p>
+<p>Kid-mode quiz screen with large emojis and simple questions.</p>
+
+<hr/>
+
+<h2>Monitoring &amp; Observability</h2>
+
+<p>Every agent call is logged through <code>utils/supabaseLogger.js</code> to the <code>wq_agent_logs</code> table. Each row captures:</p>
+<ul>
+<li><code>agent</code> (name) · <code>status</code> (ok / error) · <code>durationMs</code> · <code>model</code> used</li>
+<li><code>prompt</code> + <code>response</code> snapshots</li>
+<li><code>meta</code>: userId, tool / reason / fallback pills, agent-specific metadata</li>
+</ul>
+
+<p>The <strong>Admin Monitoring Dashboard</strong> (<code>adminDashboard.js</code>) shows this live with three tabs:</p>
+<ul>
+<li><strong>Overview</strong> — recent agent calls with tool / reason / fallback pills</li>
+<li><strong>Pipelines</strong> — session-grouped traces (silent refresh, won't kick you off the page)</li>
+<li><strong>User Drill-down</strong> — per-user agent history</li>
+</ul>
+
+<hr/>
+
+<h2>Summary by Mode</h2>
+
+<table><thead><tr>
+<th>Game Mode</th>
+<th>Agents involved</th>
+</tr></thead><tbody>
+<tr>
+<td>Quick Play</td>
+<td>levelGenerator · difficulty (fallback) · referee · reward · wordDetail · coach · chaalbaaz · learningPath · guardrail</td>
+</tr>
+<tr>
+<td>Daily Challenge</td>
+<td>levelGenerator · referee · reward · wordDetail · learningPath · guardrail</td>
+</tr>
+<tr>
+<td>Practice</td>
+<td>levelGenerator · referee · chaalbaaz · learningPath · wordDetail · guardrail</td>
+</tr>
+<tr>
+<td>1v1 Battle</td>
+<td>levelGenerator · referee (client) · learningPath · guardrail</td>
+</tr>
+<tr>
+<td>Quiz</td>
+<td>quiz · learningPath · guardrail</td>
+</tr>
+<tr>
+<td>AI Tutor</td>
+<td>tutor · guardrail</td>
+</tr>
+<tr>
+<td>Pakistan Quest</td>
+<td>levelGenerator (curated pack) · wordDetail · translate · guardrail</td>
+</tr>
+<tr>
+<td>Kids Mode</td>
+<td>kidWord · kidQuestion · guardrail (strict)</td>
+</tr>
+<tr>
+<td>Learn Tab</td>
+<td>lesson · guardrail</td>
+</tr>
+<tr>
+<td>Home Screen</td>
+<td>wordOfDay · learningPath</td>
+</tr>
+</tbody></table>
+
+<hr/>
+
+<p><em>Document generated from the live codebase. For any agent's exact prompt or implementation detail, see the source file in <code>wordquest/backend/agents/</code>.</em></p>
+
+</body></html>

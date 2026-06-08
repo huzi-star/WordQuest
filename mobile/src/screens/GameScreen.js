@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Vibration, BackHandler, ImageBackground } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { IS_SMALL } from '../utils/responsive';
 
 const BG = require('../../home_design/home_bg.jpeg');
 import WordGrid from '../components/WordGrid';
@@ -14,7 +15,7 @@ import WordDetailCard from '../components/WordDetailCard';
 import { tierForScore } from '../utils/tiers';
 import { validateWord, explainWord } from '../utils/api';
 import { initSound, playSfx, playBgm, stopBgm } from '../utils/sound';
-import { usePlan } from '../utils/plan';
+import { usePlan, hintsFor } from '../utils/plan';
 import { useSettings } from '../utils/settings';
 import { trace } from '../utils/trace';
 import { useTheme } from '../utils/theme';
@@ -50,18 +51,80 @@ function pickLine(trigger, language, vars) {
   return tpl.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? vars[k] : ''));
 }
 
-export default function GameScreen({ navigation, route }) {
+// Error boundary so a runtime exception inside the game screen never
+// closes the app — it shows a friendly card with a Restart button.
+class GameErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) {
+    console.warn('[WordQuest] GameScreen crash caught:', error?.message, info?.componentStack);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#0f172a', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <Text style={{ color: '#fde68a', fontSize: 22, fontWeight: '900', marginBottom: 12, textAlign: 'center' }}>
+            Oops! Something went wrong.
+          </Text>
+          <Text style={{ color: '#cbd5e1', fontSize: 13, marginBottom: 20, textAlign: 'center' }}>
+            {String(this.state.error?.message || this.state.error)}
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => { this.setState({ error: null }); this.props.navigation?.replace?.('Home'); }}
+            style={{ paddingVertical: 14, paddingHorizontal: 28, borderRadius: 999, backgroundColor: '#22c55e', borderWidth: 3, borderColor: '#fff', borderBottomWidth: 7, borderBottomColor: '#14532d' }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '900', letterSpacing: 1.2, fontSize: 15 }}>← BACK TO HOME</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function GameScreenWithBoundary(props) {
+  return (
+    <GameErrorBoundary navigation={props.navigation}>
+      <GameScreenInner {...props} />
+    </GameErrorBoundary>
+  );
+}
+
+function GameScreenInner({ navigation, route }) {
   const { settings } = useSettings();
   const theme = useTheme();
-  const { features } = usePlan();
+  const { features, plan } = usePlan();
+  // Source-of-truth hint count for THIS game session. Resolved from the
+  // current subscription tier — never from a stale backend payload.
+  const sessionHintCap = hintsFor(plan);
+  console.log('[WordQuest] hint cap resolved:', { plan, sessionHintCap });
+  // Defensive destructuring — any missing param falls back to a sane shape
+  // so the screen never throws during initial render.
+  const params = route?.params || {};
   const {
-    playerStats, sessionStats, difficulty, level, levelNumber = 0,
-    isDaily = false, dailyPointsPerWord = 500,
-  } = route.params;
+    playerStats = {},
+    sessionStats = {},
+    difficulty: rawDifficulty,
+    level: rawLevel,
+    levelNumber = 0,
+    isDaily = false,
+    dailyPointsPerWord = 500,
+  } = params;
+  const difficulty = rawDifficulty && typeof rawDifficulty === 'object'
+    ? { timeLimit: 60, ...rawDifficulty }
+    : { timeLimit: 60 };
+  const level = rawLevel && typeof rawLevel === 'object'
+    ? { words: [], grid: [], wordPositions: [], category: 'Mix', categoryEmoji: '✨', funFact: '', ...rawLevel }
+    : { words: [], grid: [], wordPositions: [], category: 'Mix', categoryEmoji: '✨', funFact: '' };
   const [selected, setSelected] = useState([]); // [{r,c,letter}]
   const [foundCells, setFoundCells] = useState([]);
   const [foundWords, setFoundWords] = useState([]);
   const [detailWord, setDetailWord] = useState(null);
+  // Stores the round-complete arguments if the round ended while the
+  // learning card was still open. The navigation fires only when the
+  // user explicitly taps "Continue" on the card — never before.
+  const pendingFinishRef = useRef(null);
   const [score, setScore] = useState(sessionStats.score || 0);
   const [streak, setStreak] = useState(sessionStats.streak || 0);
   const [agentMsg, setAgentMsg] = useState('');
@@ -70,7 +133,9 @@ export default function GameScreen({ navigation, route }) {
   const [popups, setPopups] = useState([]); // { id, text, x, y, color }
   const [showConfetti, setShowConfetti] = useState(false);
   const [justFoundCells, setJustFoundCells] = useState([]);
-  const [hintsLeft, setHintsLeft] = useState(features?.hints || 1);
+  // Hint cap comes from HINT_LIMITS via hintsFor(plan). NEVER trust
+  // features?.hints directly — older backend deployments returned 99.
+  const [hintsLeft, setHintsLeft] = useState(sessionHintCap);
   const [revealedHints, setRevealedHints] = useState([]); // cells revealed by hint
   const [hintsUsedThisRound, setHintsUsedThisRound] = useState(0);
   // Random 2 gold cells inside the grid. Words covering them get 2x.
@@ -83,6 +148,7 @@ export default function GameScreen({ navigation, route }) {
   });
   const lastWordAtRef = useRef(0);
   const timeLeftRef = useRef(difficulty.timeLimit);
+  const timerRef = useRef(null);
   const shake = useRef(new Animated.Value(0)).current;
   const popupIdRef = useRef(0);
 
@@ -134,10 +200,30 @@ export default function GameScreen({ navigation, route }) {
     setLeaveModalOpen(false);
     setPaused(false);
   }
-  function leaveGame() {
+  async function leaveGame() {
     setLeaveModalOpen(false);
+    // Quick Play quit (not Daily, not numbered Level) = round failed →
+    // 20-point penalty deducted from totalScoreEver + leaderboard score,
+    // then GameOver shows the penalty + possible tier-down.
+    const isQuickPlay = !isDaily && !(levelNumber > 0);
+    let penaltyInfo = null;
+    if (isQuickPlay) {
+      try {
+        // eslint-disable-next-line global-require
+        const { applyQuickPlayFailPenalty } = require('../utils/penalty');
+        penaltyInfo = await applyQuickPlayFailPenalty(settings || {}, {
+          wordsFound: foundWords.length,
+          totalWords: wordList.length,
+        });
+        trace('quick-play-fail', 'quit', {
+          wordsFound: foundWords.length, total: wordList.length,
+        });
+      } catch (_) {}
+    }
     navigation.replace('GameOver', {
       sessionStats: { ...sessionStats, score, streak },
+      penaltyInfo,
+      failed: isQuickPlay,
     });
   }
 
@@ -226,6 +312,7 @@ export default function GameScreen({ navigation, route }) {
       return;
     }
     const pick = unfound[Math.floor(Math.random() * unfound.length)];
+    if (!pick || !pick.word) { showAgent('No hint available right now.', 1800); return; }
     // Pick the first cell of that word that isn't already revealed.
     const wordCells = [];
     for (let i = 0; i < pick.word.length; i++) {
@@ -243,8 +330,8 @@ export default function GameScreen({ navigation, route }) {
     setRevealedHints((arr) => [...arr, reveal]);
     setHintsLeft((n) => n - 1);
     setHintsUsedThisRound((n) => n + 1);
-    setScore((s) => Math.max(0, s - 30));
-    spawnPopup('-30 💡', 180, 360, '#f97316');
+    setScore((s) => Math.max(0, s - 3));
+    spawnPopup('-3 💡', 180, 360, '#f97316');
     Vibration.vibrate(60);
     showAgent(`💡 Hint: "${pick.word}" — ${pick.direction === 'horizontal' ? 'horizontal' : 'vertical'} mein, row ${reveal.r + 1} col ${reveal.c + 1}`, 3200);
   }
@@ -257,12 +344,15 @@ export default function GameScreen({ navigation, route }) {
   };
 
   function findWordPositionCells(word) {
-    const pos = (level.wordPositions || []).find(p => p.word.toUpperCase() === word);
+    const W = String(word || '').toUpperCase();
+    if (!W) return [];
+    const positions = Array.isArray(level.wordPositions) ? level.wordPositions : [];
+    const pos = positions.find(p => p && String(p.word || '').toUpperCase() === W);
     if (!pos) return [];
     const { dr = 0, dc = 1 } = DIR_STEPS[pos.direction] || DIR_STEPS.horizontal;
     const cells = [];
-    for (let i = 0; i < word.length; i++) {
-      cells.push({ r: pos.startRow + dr * i, c: pos.startCol + dc * i });
+    for (let i = 0; i < W.length; i++) {
+      cells.push({ r: (pos.startRow || 0) + dr * i, c: (pos.startCol || 0) + dc * i });
     }
     return cells;
   }
@@ -271,80 +361,82 @@ export default function GameScreen({ navigation, route }) {
   // (no network round-trip), so words validate in the same frame.
   function localValidate(wordAttempt, timeLeftSec, streakValue, currentScore) {
     const upper = String(wordAttempt || '').toUpperCase();
-    if (foundWords.includes(upper)) {
+    const safeFound = Array.isArray(foundWords) ? foundWords : [];
+    const safeList = Array.isArray(wordList) ? wordList : [];
+    if (safeFound.includes(upper)) {
       return {
         isValid: false, alreadyFound: true, pointsEarned: 0, newScore: currentScore,
         message: 'Already found that one!',
         breakdown: { basePoints: 0, timeBonus: 0, multiplier: 1 },
       };
     }
-    if (!wordList.includes(upper)) {
+    if (!safeList.includes(upper)) {
       return {
         isValid: false, alreadyFound: false, pointsEarned: 0, newScore: currentScore,
         message: 'Not in the word list',
         breakdown: { basePoints: 0, timeBonus: 0, multiplier: 1 },
       };
     }
-    const effectiveStreak = streakValue + 1;
-    const multiplier =
-      effectiveStreak >= 6 ? 3 : effectiveStreak >= 4 ? 2 : effectiveStreak >= 2 ? 1.5 : 1;
-    // Daily challenge: flat reward per word (no combo, no time bonus).
-    let basePoints;
-    let timeBonus;
-    let totalPoints;
-    // Tier-mandated scoring: every non-daily puzzle awards a flat
-    // points-per-word amount tied to the player's current tier
-    // (Bronze=30 down to Master=10). Streak / time bonus removed —
-    // difficulty already lives in the grid + word length.
-    const tierPoints = difficulty?.pointsPerWord;
-    if (isDaily) {
-      basePoints = dailyPointsPerWord;
-      timeBonus = 0;
-      totalPoints = dailyPointsPerWord;
-    } else if (tierPoints) {
-      basePoints = tierPoints;
-      timeBonus = 0;
-      totalPoints = tierPoints;
-    } else {
-      basePoints = upper.length * 10;
-      timeBonus = Math.floor(timeLeftSec / 10) * 5;
-      totalPoints = Math.floor((basePoints + timeBonus) * multiplier);
-    }
+    // Simple, predictable scoring: every word is (letters + 2) points.
+    // CAT (3) = 5, BIRD (4) = 6, HOUSE (5) = 7, etc.
+    // Daily Challenge keeps its flat reward.
+    const basePoints = isDaily ? dailyPointsPerWord : (upper.length + 2);
+    const totalPoints = basePoints;
     return {
       isValid: true, alreadyFound: false, pointsEarned: totalPoints,
       newScore: currentScore + totalPoints,
       message: `Awesome! +${totalPoints} points`,
-      breakdown: { basePoints, timeBonus, multiplier, effectiveStreak },
+      breakdown: { basePoints, timeBonus: 0, multiplier: 1, effectiveStreak: 0 },
     };
   }
 
   function attemptValidation(currentLetters) {
-    const wordAttempt = currentLetters.map(s => s.letter).join('');
+    try {
+    if (!Array.isArray(currentLetters) || currentLetters.length === 0) {
+      console.warn('[WordQuest] attemptValidation called with empty/invalid letters');
+      return;
+    }
+    const wordAttempt = currentLetters.map(s => s?.letter || '').join('');
+    console.log('[WordQuest] attempt:', wordAttempt, 'mode:', isDaily ? 'daily' : 'quick-play');
     const r = localValidate(wordAttempt, timeLeftRef.current, streak, score);
+    // Fire-and-forget refereeAgent telemetry so EVERY word attempt — valid
+    // or invalid — appears in the admin pipeline. Local validation still
+    // drives the gameplay outcome; this is purely for observability.
+    try {
+      validateWord({
+        word: wordAttempt,
+        validWords: wordList,
+        timeLeftSec: timeLeftRef.current,
+        streak,
+        currentScore: score,
+      }).catch(() => {});
+    } catch (_) {}
+    console.log('[WordQuest] validate result:', { isValid: r?.isValid, points: r?.pointsEarned, msg: r?.message });
 
-    if (r.isValid) {
-      const cellsForWord = findWordPositionCells(wordAttempt);
-      const mergedCells = [...foundCells, ...cellsForWord];
-      const newFoundWords = [...foundWords, wordAttempt];
+    if (r?.isValid) {
+      const cellsForWord = findWordPositionCells(wordAttempt) || [];
+      const mergedCells = [...(foundCells || []), ...cellsForWord];
+      const newFoundWords = [...(foundWords || []), wordAttempt];
 
-      // Gold letter bonus: if the found word covers any gold cell, double the
-      // points earned for THIS word.
-      const hitsGold = cellsForWord.some(
-        (c) => goldCells.some((g) => g.r === c.r && g.c === c.c),
-      );
+      // Clean scoring — no combo, no gold double, no streak multiplier.
+      // The flat word-length reward is the only per-word income. The only
+      // bonus is a one-time +25 when the board is fully cleared.
+      // These two flags exist purely so the legacy popup / commentary
+      // branches below don't reference an undefined identifier (which
+      // previously crashed Quick Play + Daily on every word find).
+      const hitsGold = false;
+      const isCombo = false;
       let bonusEarned = 0;
-      let goldDouble = 0;
-      if (hitsGold) {
-        goldDouble = r.pointsEarned; // adds another copy of base earnings
-        bonusEarned += goldDouble;
+      lastWordAtRef.current = Date.now();
+      const clearedBoard = newFoundWords.length >= wordList.length;
+      if (clearedBoard) bonusEarned += 25;
+      // Quick Play + Daily Challenge: each successful word adds +5s to the
+      // running countdown. Only on the live board (not after a board clear,
+      // because the round is about to end anyway).
+      if (!clearedBoard && timerRef.current && timerRef.current.addSeconds) {
+        try { timerRef.current.addSeconds(5); } catch (_) {}
       }
-      // Combo speed bonus: word within 5 s of previous word lands a +100.
-      const now = Date.now();
-      const sinceLast = now - lastWordAtRef.current;
-      const isCombo = lastWordAtRef.current > 0 && sinceLast < 5000;
-      if (isCombo) bonusEarned += 100;
-      lastWordAtRef.current = now;
-      const totalEarned = r.pointsEarned + bonusEarned;
+      const totalEarned = (r?.pointsEarned || 0) + bonusEarned;
       const finalNewScore = score + totalEarned;
 
       setFoundCells(mergedCells);
@@ -430,12 +522,14 @@ export default function GameScreen({ navigation, route }) {
         word: wordAttempt,
         category: level.category,
         funFact: level.funFact,
-      }).then((tutorRes) => {
-        if (tutorRes?.ok && tutorRes.result?.explanation) {
-          // Tutor arrives later — replace the bubble with the cultural fact.
-          showAgent(`📚 ${tutorRes.result.explanation}`, 3800);
-        }
-      });
+      })
+        .then((tutorRes) => {
+          if (tutorRes?.ok && tutorRes.result?.explanation) {
+            // Tutor arrives later — replace the bubble with the cultural fact.
+            showAgent(`📚 ${tutorRes.result.explanation}`, 3800);
+          }
+        })
+        .catch(() => { /* tutor explanation is optional polish; never crash on it */ });
 
       clearSelection();
 
@@ -446,15 +540,31 @@ export default function GameScreen({ navigation, route }) {
         setPaused(true);
         setShowConfetti(true);
         Vibration.vibrate([0, 50, 80, 50, 80, 50]);
-        setTimeout(() => goToRoundComplete(newFoundWords.length, timeLeftRef.current, r.newScore, streak + 1), 1800);
+        // Save the round-complete payload and HOLD navigation. The user
+        // must read the last word's learning card and tap "Continue"
+        // before the result screen appears.
+        pendingFinishRef.current = {
+          wordsFound: newFoundWords.length,
+          timeLeft: timeLeftRef.current,
+          score: r.newScore,
+          streak: streak + 1,
+        };
       }
     } else {
       shakeGrid();
       setStreak(0);
       if (settings.sound) playSfx('wrong', { volume: 0.5 });
       Vibration.vibrate(120);
-      showAgent(r.message);
+      showAgent(r?.message || 'Not a valid word.');
       clearSelection();
+    }
+    } catch (err) {
+      // Hard safety net — any unexpected crash inside the word-selection
+      // pipeline must NEVER bring the game down. Log, clear selection,
+      // and keep playing.
+      console.warn('[WordQuest] attemptValidation crashed:', err?.message, err?.stack);
+      try { clearSelection(); } catch (_) {}
+      try { showAgent('Hmm, that didn\'t work — try another word.'); } catch (_) {}
     }
   }
 
@@ -495,8 +605,8 @@ export default function GameScreen({ navigation, route }) {
     setSelected(next);
     selectedRef.current = next;
 
-    const attempt = next.map(s => s.letter).join('');
-    const target = wordList.find(w => w === attempt);
+    const attempt = next.map(s => s?.letter || '').join('');
+    const target = Array.isArray(wordList) ? wordList.find(w => w === attempt) : null;
     if (target) attemptValidation(next);
   }
 
@@ -607,6 +717,17 @@ export default function GameScreen({ navigation, route }) {
   function onTimeUp() {
     if (paused) return;
     setPaused(true);
+    // If the learning card is still up when the timer expires, hold the
+    // navigation so the player gets to finish reading and tap Continue.
+    if (detailWord) {
+      pendingFinishRef.current = {
+        wordsFound: foundWords.length,
+        timeLeft: 0,
+        score,
+        streak: foundWords.length === wordList.length ? streak : 0,
+      };
+      return;
+    }
     goToRoundComplete(foundWords.length, 0, score, foundWords.length === wordList.length ? streak : 0);
   }
 
@@ -624,6 +745,7 @@ export default function GameScreen({ navigation, route }) {
         <View style={styles.topCol}>
           <Text style={styles.topLabel}>TIME</Text>
           <Timer
+            ref={timerRef}
             timeLimit={difficulty.timeLimit}
             onTimeUp={onTimeUp}
             onTick={onTick}
@@ -713,7 +835,17 @@ export default function GameScreen({ navigation, route }) {
         visible={!!detailWord}
         word={detailWord || ''}
         tier={tierForScore(score).key}
-        onClose={() => setDetailWord(null)}
+        category={level.category}
+        onClose={() => {
+          setDetailWord(null);
+          // If the player finished the round while reading the learning
+          // card, the navigation was held until this moment.
+          const pending = pendingFinishRef.current;
+          if (pending) {
+            pendingFinishRef.current = null;
+            goToRoundComplete(pending.wordsFound, pending.timeLeft, pending.score, pending.streak);
+          }
+        }}
       />
       </SafeAreaView>
     </ImageBackground>
@@ -723,7 +855,7 @@ export default function GameScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   bgFull: { flex: 1 },
   tealTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(13,80,80,0.55)' },
-  container: { flex: 1, paddingHorizontal: 12, paddingTop: 105, paddingBottom: 12 },
+  container: { flex: 1, paddingHorizontal: 12, paddingTop: IS_SMALL ? 60 : 90, paddingBottom: 12 },
   topBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around',
     borderRadius: 20, paddingVertical: 12, paddingHorizontal: 12,

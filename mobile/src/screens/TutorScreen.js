@@ -1,12 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
   ActivityIndicator, KeyboardAvoidingView, Platform, Keyboard, ImageBackground, Animated, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Speech from 'expo-speech';
 import { tutorChat } from '../utils/api';
 import { useSettings } from '../utils/settings';
+import { AI_TUTOR_DAILY_CAP } from '../utils/plan';
+import { getAiTutorToday, incAiTutorToday } from '../utils/storage';
 
 const BG = require('../../home_design/home_bg.jpeg');
 
@@ -70,8 +73,27 @@ export default function TutorScreen({ navigation }) {
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [speakingIdx, setSpeakingIdx] = useState(-1);
   const scrollRef = useRef(null);
   const antennaPulse = useRef(new Animated.Value(1)).current;
+  const robotBob = useRef(new Animated.Value(0)).current;
+
+  // Hard stop on every code path: unmount, screen-blur, back press.
+  function stopSpeech() {
+    try { Speech.stop(); } catch (_) {}
+    setSpeakingIdx(-1);
+  }
+  // Unmount cleanup — guarantees no voice survives the screen leaving.
+  useEffect(() => {
+    return () => { try { Speech.stop(); } catch (_) {} };
+  }, []);
+  // Screen blur — fires the instant React Navigation removes focus
+  // (including back gesture, hardware back, or any navigate elsewhere).
+  useFocusEffect(
+    useCallback(() => {
+      return () => { try { Speech.stop(); } catch (_) {} };
+    }, []),
+  );
 
   // Friendly antenna glow pulse on the robot avatar.
   useEffect(() => {
@@ -79,6 +101,13 @@ export default function TutorScreen({ navigation }) {
       Animated.sequence([
         Animated.timing(antennaPulse, { toValue: 1.35, duration: 700, useNativeDriver: true }),
         Animated.timing(antennaPulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ]),
+    ).start();
+    // Robot head gentle floating up-down idle bob.
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(robotBob, { toValue: -4, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(robotBob, { toValue: 0,  duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ]),
     ).start();
   }, []);
@@ -96,10 +125,20 @@ export default function TutorScreen({ navigation }) {
   async function send() {
     const text = input.trim();
     if (!text || busy) return;
+    // AI Tutor daily cost guard — hard limit per local day.
+    const usedToday = await getAiTutorToday();
+    if (usedToday >= AI_TUTOR_DAILY_CAP) {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: `You've reached today's ${AI_TUTOR_DAILY_CAP} tutor messages. Come back tomorrow — I'll be ready with fresh lessons! 🌙` },
+      ]);
+      return;
+    }
     setInput('');
     const next = [...messages, { role: 'user', content: text }];
     setMessages(next);
     setBusy(true);
+    await incAiTutorToday();
     const r = await tutorChat(next.slice(-10), childAge);
     setBusy(false);
     if (r?.ok && r.reply) {
@@ -109,8 +148,18 @@ export default function TutorScreen({ navigation }) {
     }
   }
 
-  function speak(text) {
-    try { Speech.stop(); Speech.speak(text, { language: 'en-US', rate: 0.95 }); } catch (_) {}
+  function speak(text, idx) {
+    if (!text) return;
+    try {
+      Speech.stop();
+      setSpeakingIdx(idx);
+      Speech.speak(String(text), {
+        language: 'en-US', rate: 0.95,
+        onDone:    () => setSpeakingIdx(-1),
+        onStopped: () => setSpeakingIdx(-1),
+        onError:   () => setSpeakingIdx(-1),
+      });
+    } catch (_) { setSpeakingIdx(-1); }
   }
 
   // Auto-scroll on new message + when keyboard opens, so the input bar +
@@ -139,12 +188,15 @@ export default function TutorScreen({ navigation }) {
         >
           {/* HEADER with cute robot avatar + bubbly title */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <TouchableOpacity
+              onPress={() => { stopSpeech(); navigation.goBack(); }}
+              style={styles.backBtn}
+            >
               <Text style={styles.backIcon}>←</Text>
             </TouchableOpacity>
 
             <View style={styles.headerCenter}>
-              <View style={styles.robotWrap}>
+              <Animated.View style={[styles.robotWrap, { transform: [{ translateY: robotBob }] }]}>
                 <View style={styles.robotAntennaStem} />
                 <Animated.View style={[styles.robotAntennaBulb, { transform: [{ scale: antennaPulse }] }]} />
                 <View style={styles.robotHead}>
@@ -156,7 +208,7 @@ export default function TutorScreen({ navigation }) {
                   <View style={styles.robotEarL} />
                   <View style={styles.robotEarR} />
                 </View>
-              </View>
+              </Animated.View>
 
               <View style={styles.titlePlate}>
                 <Text style={styles.titleText}>AI TUTOR</Text>
@@ -178,7 +230,13 @@ export default function TutorScreen({ navigation }) {
             onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
           >
             {messages.map((m, i) => (
-              <Bubble key={i} msg={m} onSpeak={() => speak(m.content)} />
+              <Bubble
+                key={i}
+                msg={m}
+                speaking={speakingIdx === i}
+                speakingLocked={speakingIdx !== -1 && speakingIdx !== i}
+                onSpeak={() => (speakingIdx === i ? stopSpeech() : speak(m.content, i))}
+              />
             ))}
             {busy ? (
               <View style={styles.thinkingRow}>
@@ -218,21 +276,57 @@ export default function TutorScreen({ navigation }) {
   );
 }
 
-function Bubble({ msg, onSpeak }) {
+function Bubble({ msg, onSpeak, speaking, speakingLocked }) {
   const mine = msg.role === 'user';
+  // Slide-in fade: AI bubbles from left, user bubbles from right.
+  const slide = useRef(new Animated.Value(mine ? 24 : -24)).current;
+  const fade  = useRef(new Animated.Value(0)).current;
+  const speakerPulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(slide, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(fade,  { toValue: 1, duration: 280, useNativeDriver: true }),
+    ]).start();
+  }, []); // eslint-disable-line
+  useEffect(() => {
+    if (speaking) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(speakerPulse, { toValue: 1.25, duration: 420, useNativeDriver: true }),
+          Animated.timing(speakerPulse, { toValue: 1,    duration: 420, useNativeDriver: true }),
+        ]),
+      ).start();
+    } else {
+      speakerPulse.stopAnimation();
+      speakerPulse.setValue(1);
+    }
+  }, [speaking]); // eslint-disable-line
   return (
-    <View style={[styles.bubbleRow, mine ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}>
+    <Animated.View
+      style={[
+        styles.bubbleRow,
+        mine ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' },
+        { opacity: fade, transform: [{ translateX: slide }] },
+      ]}
+    >
       {!mine ? <Text style={styles.bubbleAvatar}>🤖</Text> : null}
       <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleAi]}>
         <Text style={[styles.bubbleText, mine && { color: '#fff' }]}>{msg.content}</Text>
         {!mine ? (
-          <TouchableOpacity activeOpacity={0.7} onPress={onSpeak} style={styles.speakBtn}>
-            <Text style={styles.speakIcon}>🔊</Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={onSpeak}
+            disabled={speakingLocked}
+            style={[styles.speakBtn, speaking && styles.speakBtnActive, speakingLocked && styles.speakBtnLocked]}
+          >
+            <Animated.Text style={[styles.speakIcon, { transform: [{ scale: speakerPulse }] }]}>
+              {speaking ? '📢' : '🔊'}
+            </Animated.Text>
           </TouchableOpacity>
         ) : null}
       </View>
       {mine ? <Text style={styles.bubbleAvatar}>🧒</Text> : null}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -330,9 +424,14 @@ const styles = StyleSheet.create({
   bubbleText: { color: '#fff', fontSize: 15, lineHeight: 21, fontWeight: '700' },
   speakBtn: {
     marginTop: 8, alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 8, paddingVertical: 3,
+    backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 10, paddingVertical: 5,
     borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
   },
+  speakBtnActive: {
+    backgroundColor: '#f59e0b', borderColor: '#fde68a',
+    shadowColor: '#f59e0b', shadowOpacity: 0.85, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 10,
+  },
+  speakBtnLocked: { opacity: 0.35 },
   speakIcon: { fontSize: 14 },
 
   thinkingRow: {

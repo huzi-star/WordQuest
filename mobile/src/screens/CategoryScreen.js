@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Easing, ImageBackground,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Easing, ImageBackground, Modal,
 } from 'react-native';
 
 const BG = require('../../home_design/home_bg.jpeg');
@@ -129,6 +129,9 @@ export default function CategoryScreen({ navigation, route }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [tierObj, setTierObj] = useState(null);
+  const [showChaalbaaz, setShowChaalbaaz] = useState(false);
+  const chaalbaazScale = useRef(new Animated.Value(0.6)).current;
+  const chaalbaazWag = useRef(new Animated.Value(0)).current;
 
   const fadeIn = useRef(new Animated.Value(0)).current;
   const heroScale = useRef(new Animated.Value(0.7)).current;
@@ -165,6 +168,22 @@ export default function CategoryScreen({ navigation, route }) {
       }
       setData(res);
       setLoading(false);
+      // Quick Play only: fire the Chaalbaaz intro modal when the backend
+      // says a HARD level was triggered for a dominating player. The
+      // preview screen waits on Continue before the user can tap LET'S
+      // PLAY — effectively pausing the flow.
+      if (res?.chaalbaazIntro?.active && !levelNumber) {
+        setShowChaalbaaz(true);
+        Animated.spring(chaalbaazScale, {
+          toValue: 1, useNativeDriver: true, friction: 5, tension: 80,
+        }).start();
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(chaalbaazWag, { toValue: 1, duration: 700, useNativeDriver: true }),
+            Animated.timing(chaalbaazWag, { toValue: -1, duration: 700, useNativeDriver: true }),
+          ]),
+        ).start();
+      }
       Animated.parallel([
         Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }),
         Animated.spring(heroScale, { toValue: 1, useNativeDriver: true, friction: 5 }),
@@ -224,10 +243,10 @@ export default function CategoryScreen({ navigation, route }) {
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {chaalbaazActive ? (
+          {chaalbaazActive && !showChaalbaaz ? (
             <Animated.View style={[styles.chaalbaazBanner, { opacity: fadeIn }]}>
               <Text style={styles.chaalbaazTitle}>😏 ADVERSARY ACTIVATED</Text>
-              <Text style={styles.chaalbaazSub}>You're doing great — Chaalbaaz cranked up the difficulty!</Text>
+              <Text style={styles.chaalbaazSub}>Chaalbaaz cranked up the difficulty for you!</Text>
             </Animated.View>
           ) : null}
 
@@ -300,12 +319,58 @@ export default function CategoryScreen({ navigation, route }) {
                 })
               }
             >
-              <Text style={styles.startBtnText}>LET'S PLAY →</Text>
+              <Text style={styles.startBtnText}>LET'S PLAY</Text>
             </TouchableOpacity>
           </Animated.View>
 
           <View style={{ height: 18 }} />
         </ScrollView>
+
+        {/* Chaalbaaz pre-round modal — Quick Play HARD transitions only.
+            Pauses the user on the preview screen until they tap Continue. */}
+        <Modal
+          visible={showChaalbaaz}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {}}
+        >
+          <View style={styles.chaalbaazModalBackdrop}>
+            <Animated.View
+              style={[
+                styles.chaalbaazModalCard,
+                {
+                  transform: [
+                    { scale: chaalbaazScale },
+                    { rotate: chaalbaazWag.interpolate({ inputRange: [-1, 1], outputRange: ['-3deg', '3deg'] }) },
+                  ],
+                },
+              ]}
+            >
+              <View style={styles.chaalbaazAvatar}>
+                <Text style={styles.chaalbaazAvatarEmoji}>😏</Text>
+              </View>
+              <Text style={styles.chaalbaazModalTitle}>CHAALBAAZ</Text>
+              <Text style={styles.chaalbaazModalLabel}>HARD CHALLENGE INCOMING</Text>
+              <View style={styles.chaalbaazBubble}>
+                <Text style={styles.chaalbaazBubbleText}>
+                  {data?.chaalbaazIntro?.message || "You're getting too fast! I'm raising the difficulty. Bet I catch you this round."}
+                </Text>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={styles.chaalbaazContinueBtn}
+                onPress={() => {
+                  setShowChaalbaaz(false);
+                  navigation.replace('Game', {
+                    playerStats, sessionStats, difficulty, level, levelNumber,
+                  });
+                }}
+              >
+                <Text style={styles.chaalbaazContinueText}>CONTINUE →</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </ImageBackground>
   );
@@ -398,6 +463,62 @@ const styles = StyleSheet.create({
   },
   chaalbaazTitle: { color: '#fcd34d', fontWeight: '900', fontSize: 12, letterSpacing: 1.5 },
   chaalbaazSub: { color: '#fed7aa', marginTop: 4, fontSize: 13 },
+
+  // Chaalbaaz pre-round MODAL — pauses the flow until Continue is tapped.
+  chaalbaazModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.78)',
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 22,
+  },
+  chaalbaazModalCard: {
+    width: '100%', maxWidth: 380,
+    backgroundColor: '#1a0a0a',
+    borderRadius: 26,
+    paddingHorizontal: 22, paddingTop: 28, paddingBottom: 22,
+    alignItems: 'center',
+    borderWidth: 3, borderColor: '#f97316',
+    borderBottomWidth: 9, borderBottomColor: '#7c2d12',
+    shadowColor: '#f97316', shadowOpacity: 0.55, shadowRadius: 22,
+    shadowOffset: { width: 0, height: 8 }, elevation: 22,
+  },
+  chaalbaazAvatar: {
+    width: 96, height: 96, borderRadius: 48,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#7c2d12',
+    borderWidth: 4, borderColor: '#fcd34d',
+    marginBottom: 10,
+  },
+  chaalbaazAvatarEmoji: { fontSize: 56 },
+  chaalbaazModalTitle: {
+    color: '#fcd34d', fontSize: 26, fontWeight: '900', letterSpacing: 3,
+  },
+  chaalbaazModalLabel: {
+    color: '#fed7aa', fontSize: 11, fontWeight: '900', letterSpacing: 2,
+    marginTop: 2, marginBottom: 14,
+  },
+  chaalbaazBubble: {
+    width: '100%',
+    backgroundColor: '#fff7ed',
+    borderRadius: 18, padding: 14,
+    borderWidth: 2, borderColor: '#f97316',
+    marginBottom: 18,
+  },
+  chaalbaazBubbleText: {
+    color: '#7c2d12', fontSize: 15, lineHeight: 22, fontWeight: '700',
+    textAlign: 'center',
+  },
+  chaalbaazContinueBtn: {
+    width: '100%',
+    paddingVertical: 16, borderRadius: 999,
+    backgroundColor: '#22c55e',
+    alignItems: 'center',
+    borderWidth: 3, borderColor: '#fff',
+    borderBottomWidth: 8, borderBottomColor: '#14532d',
+  },
+  chaalbaazContinueText: {
+    color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 1.8,
+  },
 
   // Hero
   heroWrap: { alignItems: 'center', paddingVertical: 6 },

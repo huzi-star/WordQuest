@@ -123,6 +123,13 @@ export async function upsertStats(userId, stats, prefs = {}) {
       // devices, or the TierUp screen would re-trigger every time stats
       // sync down from Supabase.
       lastSeenTier: stats.lastSeenTier || 'bronze',
+      // Practice Mode (unranked) — kept inside the JSONB preferences blob
+      // so it can sync across devices without a schema migration. Tier
+      // points / leaderboard rank are never touched by these values.
+      practiceHighScore: Number(stats.practiceHighScore) || 0,
+      practiceRoundsPlayed: Number(stats.practiceRoundsPlayed) || 0,
+      practiceRoundsWon: Number(stats.practiceRoundsWon) || 0,
+      practiceCurrentDifficulty: stats.practiceCurrentDifficulty || 'easy',
     },
     updated_at: new Date().toISOString(),
   };

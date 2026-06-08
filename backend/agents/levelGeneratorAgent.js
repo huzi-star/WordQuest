@@ -54,19 +54,87 @@ function placeWord(grid, word, size, allowedDirections) {
   return false;
 }
 
-function safeBuildGrid(words, size, allowedDirections) {
+// Verify a position actually traces the right word in the grid. Returns
+// true if grid[startRow + dr*i][startCol + dc*i] === word[i] for every i.
+// This is the SAME logic the mobile WordGrid uses to detect a found word,
+// so passing this guarantees the kid can solve the puzzle.
+function isPlacementTraceable(grid, size, word, pos) {
+  if (!pos || !pos.direction) return false;
+  const dir = DIRECTIONS[pos.direction];
+  if (!dir) return false;
+  const { dr, dc } = dir;
+  for (let i = 0; i < word.length; i++) {
+    const r = pos.startRow + dr * i;
+    const c = pos.startCol + dc * i;
+    if (r < 0 || c < 0 || r >= size || c >= size) return false;
+    if (grid[r][c] !== word[i]) return false;
+  }
+  return true;
+}
+
+// Validate that EVERY requested word ended up traceable in the final grid.
+// If even one word fails the trace, the puzzle is rejected so the caller
+// can regenerate it instead of shipping an unsolvable round to the kid.
+function validateAllPlacements(grid, size, words, positions) {
+  if (!positions || positions.length !== words.length) {
+    return { ok: false, reason: `placed=${positions ? positions.length : 0} of ${words.length}`, missing: words.filter((w) => !positions.find((p) => p.word === w)) };
+  }
+  const missing = [];
+  for (const w of words) {
+    const p = positions.find((x) => x.word === w);
+    if (!p) { missing.push(w); continue; }
+    if (!isPlacementTraceable(grid, size, w, p)) missing.push(w);
+  }
+  if (missing.length) return { ok: false, reason: 'trace-fail', missing };
+  return { ok: true };
+}
+
+// Attempt to fill a single empty grid with ALL the words. Returns null
+// if any word couldn't be placed — the caller retries with a fresh grid.
+function attemptFullBuild(words, size, allowedDirections) {
   const grid = emptyGrid(size);
   const positions = [];
-  for (const w of words) {
+  // Longest-word-first improves placement success on tight grids.
+  const ordered = [...words].sort((a, b) => b.length - a.length);
+  for (const w of ordered) {
+    if (w.length > size) return null; // can't fit at all
     const p = placeWord(grid, w, size, allowedDirections);
-    if (p) positions.push(p);
-  }
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
-      if (!grid[r][c]) grid[r][c] = randLetter();
-    }
+    if (!p) return null; // partial fill — caller retries
+    positions.push(p);
   }
   return { grid, positions };
+}
+
+// Build a grid that guarantees ALL words are placed AND every placement
+// is traceable. Retries up to 8 times (different RNG / order each time)
+// before giving up. Only after success do we fill empty cells with noise
+// so a placement gap never survives into the response.
+function safeBuildGrid(words, size, allowedDirections) {
+  const MAX_ATTEMPTS = 8;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const built = attemptFullBuild(words, size, allowedDirections);
+    if (!built) continue;
+    // Validate against the partially-filled grid (no noise letters yet) so
+    // any latent bug — word-letter mismatch, out-of-bounds direction —
+    // is caught before noise overwrites a missing cell.
+    const v = validateAllPlacements(built.grid, size, words, built.positions);
+    if (!v.ok) continue;
+    // Fill noise letters last.
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (!built.grid[r][c]) built.grid[r][c] = randLetter();
+      }
+    }
+    // Re-validate after noise fill — noise must not corrupt a placement
+    // (this can't happen logically since we only fill empties, but the
+    // assertion makes the contract explicit and adds a safety check).
+    const v2 = validateAllPlacements(built.grid, size, words, built.positions);
+    if (!v2.ok) continue;
+    return { grid: built.grid, positions: built.positions, attempts: attempt + 1 };
+  }
+  // Couldn't build a fully-placed grid after MAX_ATTEMPTS — return null
+  // so the caller knows to drop / regenerate the word list.
+  return null;
 }
 
 // Minimal emergency seed pool used ONLY if Gemini fails all retries.
@@ -159,6 +227,14 @@ async function levelGeneratorAgent({
   reshuffleEmoji = '',
   reshuffleFunFact = '',
   tier = null, // bronze/silver/gold/platinum/diamond/elite/master — shapes word style
+  // Practice Mode: caller passes a specific category to use. The agent
+  // generates words FOR that category and we return its metadata as-is.
+  forceCategory = '',
+  forceCategoryEmoji = '',
+  practiceHint = '',
+  // Optional — passed so the guardrail can apply per-user repeat
+  // detection across this player's last ~80 puzzles.
+  userId = null,
 }) {
   const TIERS = require('../config/tiers');
   const tierObj = tier ? TIERS.TIERS.find((t) => t.key === tier) : null;
@@ -218,12 +294,16 @@ async function levelGeneratorAgent({
 
   if (aiReady) {
     const NEUTRAL_CATS = TIERS.CATEGORIES.join(', ');
+    const categoryDirective = forceCategory
+      ? `Category is FIXED: "${forceCategory}". Generate words that fit that category.`
+      : `Pick ONE category from this country-neutral list ONLY (no Pakistan/India/region specific themes):
+${NEUTRAL_CATS}.`;
     const prompts = [
       // Attempt 1: full instructions
       `You are a creative word-search puzzle designer for an international English learning game for children aged 6 to 13.
 
-Pick ONE category from this country-neutral list ONLY (no Pakistan/India/region specific themes):
-${NEUTRAL_CATS}.
+${categoryDirective}
+${practiceHint ? `Word style: ${practiceHint}` : ''}
 
 Constraints:
 - Avoid category: ${lastCategory || 'none'}
@@ -259,21 +339,86 @@ Return ONLY this JSON (no markdown, no commentary):
     aiResult = emergencyPuzzle(wordCount, gridSize, lastCategory);
   }
 
-  const chosenWords = aiResult.words.slice(0, wordCount);
+  let chosenWords = aiResult.words.slice(0, wordCount);
   if (!chosenWords.length) {
     throw new Error('No words available even with emergency fallback');
   }
 
+  // SAFETY GUARDRAIL — strip any word the guardrail agent rejects. Words
+  // get the 'kid' age group + 'word' type → blocklist + length cap apply.
+  try {
+    const guardrailAgent = require('./guardrailAgent');
+    const gr = await guardrailAgent({
+      content: chosenWords, type: 'word', ageGroup: 'kid', userId,
+    });
+    if (gr && Array.isArray(gr.allowed)) {
+      chosenWords = gr.allowed;
+    }
+  } catch (_) { /* never block puzzle gen on guardrail failure */ }
+  if (!chosenWords.length) {
+    throw new Error('All words blocked by safety guardrail');
+  }
+
+  // SAFETY GUARDRAIL — also guard category name, emoji, and fun fact so
+  // the puzzle metadata visible on the GameScreen is never offensive /
+  // age-inappropriate. If any field is flagged, fall back to a safe value.
+  let safeCategory = aiResult.category;
+  let safeEmoji = aiResult.categoryEmoji;
+  let safeFunFact = aiResult.funFact || '';
+  try {
+    const { guardText } = require('../utils/guardrailRunner');
+    const c1 = await guardText(String(safeCategory || ''), 'tutor', { ageGroup: 'kid', userId });
+    if (c1 === null) safeCategory = lastCategory || 'Mix';
+    const c2 = await guardText(String(safeFunFact || ''), 'tutor', { ageGroup: 'kid', userId });
+    if (c2 === null) safeFunFact = '';
+    // Emoji guardrail — emojis are visual; we accept anything that isn't
+    // a slur (rare). guardText handles emojis fine.
+    const c3 = await guardText(String(safeEmoji || ''), 'tutor', { ageGroup: 'kid', userId });
+    if (c3 === null) safeEmoji = '✨';
+  } catch (_) { /* never block puzzle gen on guardrail failure */ }
+
   const allowedDirs = pickDirections();
-  const { grid, positions } = safeBuildGrid(chosenWords, gridSize, allowedDirs);
+  // safeBuildGrid now retries 8x and validates EVERY word is traceable
+  // along its recorded direction. Returns null only when even an aggressive
+  // retry can't fit the given words — in that case drop the longest word
+  // and retry, repeating until we have a fully-placed traceable grid OR
+  // the list shrinks to the bare minimum playable size (2 words).
+  let built = null;
+  let attempt = 0;
+  let drops = 0;
+  while (!built && chosenWords.length >= 2 && attempt < 6) {
+    attempt++;
+    built = safeBuildGrid(chosenWords, gridSize, allowedDirs);
+    if (!built) {
+      // Drop the longest word (most likely the blocker) and try again.
+      const longestIdx = chosenWords.reduce((best, w, i) => w.length > chosenWords[best].length ? i : best, 0);
+      const dropped = chosenWords[longestIdx];
+      chosenWords = chosenWords.filter((_, i) => i !== longestIdx);
+      drops += 1;
+      console.warn(`[levelGenerator] grid build failed (attempt ${attempt}), dropping "${dropped}" (was too tight). Remaining: ${chosenWords.length}`);
+    }
+  }
+  if (!built) {
+    throw new Error('levelGenerator: could not build a fully-placed traceable grid even after dropping long words');
+  }
+  const { grid, positions } = built;
+  // Final assertion — paranoia check that what we are about to return is
+  // actually solvable. validateAllPlacements is pure and runs in <1ms.
+  const finalCheck = validateAllPlacements(grid, gridSize, positions.map((p) => p.word), positions);
+  if (!finalCheck.ok) {
+    throw new Error(`levelGenerator: post-build validation failed (${finalCheck.reason}) missing=${(finalCheck.missing || []).join(',')}`);
+  }
+  if (drops > 0) {
+    console.warn(`[levelGenerator] succeeded after dropping ${drops} unplaceable word(s); final word count = ${positions.length}`);
+  }
 
   return {
-    category: aiResult.category,
-    categoryEmoji: aiResult.categoryEmoji,
+    category: safeCategory,
+    categoryEmoji: safeEmoji,
     words: positions.map((p) => p.word),
     grid,
     wordPositions: positions,
-    funFact: aiResult.funFact || '',
+    funFact: safeFunFact,
   };
 }
 

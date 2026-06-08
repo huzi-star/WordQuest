@@ -4,6 +4,7 @@
 
 const { generate, isConfigured } = require('../utils/llm');
 const { getTier } = require('../config/tiers');
+const { guardText } = require('../utils/guardrailRunner');
 
 async function kidWordAgent({ tier = 'bronze', count = 10, avoid = [] } = {}) {
   const t = getTier(tier);
@@ -66,10 +67,18 @@ Return STRICTLY valid JSON only:
       const word = String(w.word || '').trim().toLowerCase();
       if (!word || seen.has(word)) continue;
       seen.add(word);
+      // SAFETY GUARDRAIL — drop any kid-vocab card whose head word OR
+      // explanatory text fails the under-13 safety check.
+      const safeWord = await guardText(word.toUpperCase(), 'word', { ageGroup: 'kid' });
+      if (safeWord === null) continue;
+      const safeMeaning = await guardText(String(w.meaning || '').trim(), 'tutor', { ageGroup: 'kid', allowList: [word.toUpperCase()] });
+      const safeExample = await guardText(String(w.example || '').trim(), 'tutor', { ageGroup: 'kid', allowList: [word.toUpperCase()] });
+      if (safeMeaning === null || safeExample === null) continue;
+      seen.add(word);
       out.push({
         word,
-        meaning: String(w.meaning || '').trim(),
-        example: String(w.example || '').trim(),
+        meaning: safeMeaning || '',
+        example: safeExample || '',
         synonym: String(w.synonym || '').trim().toLowerCase(),
         synonym_2: w.synonym_2 ? String(w.synonym_2).trim().toLowerCase() : null,
         antonym: String(w.antonym || '').trim().toLowerCase(),

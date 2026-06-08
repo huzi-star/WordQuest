@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View, Text, Image, ImageBackground } from 'react-native';
+import { rs, rfs } from '../utils/responsive';
 
 const BG = require('../../home_design/home_bg.jpeg');
 const LOGO = require('../../app-logo.jpeg');
@@ -50,9 +51,9 @@ export default function AnimatedSplash({ onDone }) {
               <Text style={styles.plateBrand}>WordQuest</Text>
               <Text style={styles.plateTag}>BUILD YOUR MIND</Text>
             </View>
-            <Text style={styles.bigBrand}>WordQuest</Text>
-            <View style={styles.tagPill}>
-              <Text style={styles.tagPillText}>AI POWERED · WORLD THEMED</Text>
+            <Text style={styles.brand}>WordQuest</Text>
+            <View style={styles.brandPill}>
+              <Text style={styles.brandPillText}>AI POWERED · WORLD THEMED</Text>
             </View>
           </Animated.View>
         </View>
@@ -62,56 +63,68 @@ export default function AnimatedSplash({ onDone }) {
 }
 
 const styles = StyleSheet.create({
-  container: { ...StyleSheet.absoluteFillObject, zIndex: 999 },
+  container: { ...StyleSheet.absoluteFillObject, backgroundColor: '#0f172a' },
   bg: { flex: 1 },
-  tealTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(13,80,80,0.55)' },
+  tealTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.65)' },
+  inner: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
 
-  inner: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
-
-  logoStack: { alignItems: 'center', justifyContent: 'center', width: 180, height: 180 },
+  logoStack: {
+    width: rs(220), height: rs(220),
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: rs(18),
+  },
   outerRing: {
-    position: 'absolute',
-    width: 180, height: 180, borderRadius: 90,
-    borderWidth: 4, borderColor: 'rgba(252, 211, 21, 0.75)',
+    position: 'absolute', width: rs(220), height: rs(220), borderRadius: rs(110),
+    borderWidth: 5, borderColor: '#facc15',
     borderStyle: 'dashed',
   },
   logoOuter: {
-    width: 152, height: 152, borderRadius: 76,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    width: rs(170), height: rs(170), borderRadius: rs(85),
+    backgroundColor: '#facc15',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 5, borderColor: '#a16207',
-    shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
+    borderWidth: 6, borderColor: '#fff',
+    shadowColor: '#facc15', shadowOpacity: 0.55, shadowRadius: 18, shadowOffset: { width: 0, height: 8 },
     elevation: 14,
   },
   logoInner: {
-    width: 124, height: 124, borderRadius: 62,
+    width: rs(150), height: rs(150), borderRadius: rs(75),
+    backgroundColor: '#92400e',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 4, borderColor: '#fff',
     overflow: 'hidden',
-    borderWidth: 4, borderColor: '#facc15',
   },
-  logo: { width: '100%', height: '100%' },
+  logo: { width: rs(150), height: rs(150), borderRadius: rs(75) },
 
-  titleWrap: { marginTop: 22, alignItems: 'center' },
+  titleWrap: { alignItems: 'center' },
+
   plate: {
     backgroundColor: '#92400e',
-    paddingHorizontal: 28, paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: 28, paddingVertical: 12,
+    borderRadius: 22,
     borderWidth: 3, borderColor: '#fbbf24',
-    borderBottomWidth: 7, borderBottomColor: '#451a03',
+    borderBottomWidth: 9, borderBottomColor: '#451a03',
     alignItems: 'center',
+    marginBottom: 14,
   },
-  plateBrand: { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
-  plateTag: { color: '#fde68a', fontSize: 10, fontWeight: '900', letterSpacing: 2.5, marginTop: -2 },
+  plateBrand: {
+    color: '#fff', fontSize: rfs(22), fontWeight: '900', letterSpacing: 1.2,
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 3,
+  },
+  plateTag: {
+    color: '#fde68a', fontSize: rfs(10), fontWeight: '900', letterSpacing: 2, marginTop: 4,
+  },
 
-  bigBrand: {
-    color: '#bfdbfe', fontSize: 44, fontWeight: '900', marginTop: 12,
-    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 3 }, textShadowRadius: 5,
+  brand: {
+    color: '#e2e8f0', fontSize: rfs(38), fontWeight: '900', letterSpacing: -0.5,
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 6,
+    marginBottom: 8,
   },
-  tagPill: {
-    marginTop: 8,
-    backgroundColor: '#78350f',
-    paddingHorizontal: 18, paddingVertical: 7,
-    borderRadius: 20,
+  brandPill: {
+    paddingHorizontal: 16, paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#92400e',
     borderWidth: 2, borderColor: '#fbbf24',
+    borderBottomWidth: 5, borderBottomColor: '#451a03',
   },
-  tagPillText: { color: '#fef3c7', fontSize: 11, fontWeight: '900', letterSpacing: 2 },
+  brandPillText: { color: '#fde68a', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
 });

@@ -65,7 +65,7 @@ export default function ProMaxHubScreen({ navigation }) {
                 ) : !isProMax ? (
                   <Text style={styles.lock}>🔒</Text>
                 ) : (
-                  <Text style={styles.arrow}>→</Text>
+                  <Text style={styles.arrow}>›</Text>
                 )}
               </TouchableOpacity>
             );

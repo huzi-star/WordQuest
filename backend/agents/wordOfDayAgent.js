@@ -4,6 +4,7 @@
 
 const { generate, isConfigured } = require('../utils/llm');
 const { TIERS } = require('../config/tiers');
+const { guardText, guardObjectFields } = require('../utils/guardrailRunner');
 
 const cache = new Map(); // key: `${tier}|${YYYY-MM-DD}` → result
 
@@ -50,8 +51,18 @@ Return STRICTLY valid JSON, nothing else:
       synonym: String(parsed.synonym || '').trim(),
       antonym: String(parsed.antonym || '').trim(),
     };
-    if (result.word) cache.set(key, result);
-    return result;
+    // SAFETY GUARDRAIL — refuse to publish a Word of the Day that fails
+    // child-safety. Bail out so the home screen falls back to its hard-
+    // coded "BRAVE" rather than caching a bad word for the whole day.
+    const okWord = await guardText(result.word.toUpperCase(), 'word', { ageGroup: 'kid' });
+    if (okWord === null) return null;
+    const safe = await guardObjectFields(result, 'tutor', {
+      ageGroup: 'kid', allowList: [result.word.toUpperCase()],
+      fields: ['meaning', 'example', 'synonym', 'antonym'],
+    });
+    if (!safe.meaning) return null;
+    if (safe.word) cache.set(key, safe);
+    return safe;
   } catch (err) {
     return null;
   }

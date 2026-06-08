@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Dimensions } from 'react-native';
 import * as Speech from 'expo-speech';
 import TierBadge from '../components/TierBadge';
-import { TIERS, nextTier } from '../utils/tiers';
+import { TIERS } from '../utils/tiers';
 import { playSfx } from '../utils/sound';
 import { markTierSeen } from '../utils/storage';
 import { trace } from '../utils/trace';
@@ -126,7 +126,6 @@ export default function TierUpScreen({ route, navigation }) {
   const returnTo = route.params?.returnTo || null;
   const returnParams = route.params?.returnParams || undefined;
   const to = TIERS.find((t) => t.key === toKey) || TIERS[1];
-  const nxt = nextTier(to.key);
 
   async function handleContinue() {
     // Mark this tier as celebrated so we don't re-show on the next return.
@@ -299,12 +298,7 @@ export default function TierUpScreen({ route, navigation }) {
           You reached {to.name}!
         </Animated.Text>
 
-        {/* Subtitle */}
-        <Animated.Text style={[styles.subtitle, { opacity: subOp }]}>
-          {nxt
-            ? `Keep going — ${nxt.name} is now unlocked!`
-            : `You're at the top — Master tier reached!`}
-        </Animated.Text>
+        {/* Subtitle removed — title alone is the celebration per spec. */}
 
         {/* Sparkle row */}
         <Animated.View
@@ -329,7 +323,7 @@ export default function TierUpScreen({ route, navigation }) {
             style={styles.continueBtn}
             onPress={handleContinue}
           >
-            <Text style={styles.continueText}>Let's Go!  →</Text>
+            <Text style={styles.continueText}>Let's Go!</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>

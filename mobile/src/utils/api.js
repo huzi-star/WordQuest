@@ -72,17 +72,6 @@ export async function getCoach(stats) {
   }
 }
 
-export async function generateQuiz(payload) {
-  try {
-    // Quiz generation can take up to 50s on the backend (Gemini latency +
-    // retries) — use the slow client so axios doesn't abort early.
-    const { data } = await slowClient.post('/api/generate-quiz', withLang(payload || {}));
-    return data;
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-}
-
 export async function health() {
   try {
     const { data } = await client.get('/api/health');
@@ -101,9 +90,9 @@ export async function fetchTierLeaderboard(tier, userId) {
   } catch (err) { return { ok: false, error: err.message }; }
 }
 
-export async function fetchWordDetail(word, tier = 'bronze') {
+export async function fetchWordDetail(word, tier = 'bronze', category = '', userId = null) {
   try {
-    const { data } = await client.post('/api/word-detail', { word, tier });
+    const { data } = await client.post('/api/word-detail', { word, tier, category, userId });
     return data;
   } catch (err) { return { ok: false, error: err.message }; }
 }
@@ -151,9 +140,89 @@ export async function battleSubmitResult({ matchId, userId, score, wordsFound })
   } catch (err) { return { ok: false, error: err.message }; }
 }
 
+export async function battleHeartbeat(userId) {
+  try {
+    const { data } = await client.post('/api/battle/heartbeat', { userId });
+    return data;
+  } catch (err) { return { ok: false, error: err.message }; }
+}
+
+export async function battleProgress({ matchId, userId, score, wordsFound }) {
+  try {
+    const { data } = await client.post(`/api/battle/match/${matchId}/progress`, { userId, score, wordsFound });
+    return data;
+  } catch (err) { return { ok: false, error: err.message }; }
+}
+
 export async function battleTimeoutMatch(matchId) {
   try {
     const { data } = await client.post(`/api/battle/match/${matchId}/timeout`, {});
+    return data;
+  } catch (err) { return { ok: false, error: err.message }; }
+}
+
+export async function battleClaimWord({ matchId, userId, word }) {
+  try {
+    const { data } = await client.post(`/api/battle/match/${matchId}/claim`, { userId, word });
+    return data;
+  } catch (err) { return { ok: false, error: err.message }; }
+}
+
+export async function battleForfeitMatch({ matchId, userId }) {
+  try {
+    const { data } = await client.post(`/api/battle/match/${matchId}/forfeit`, { userId });
+    return data;
+  } catch (err) { return { ok: false, error: err.message }; }
+}
+
+// (Personalized Learning Path Agent retired — exports removed.)
+
+// Long-term-memory coach feedback (win = motivational, loss = full diagnosis
+// + next-3-rounds prescription). Backed by wq_player_memory.coach_history.
+export async function coachFeedback(payload) {
+  try {
+    const { data } = await slowClient.post('/api/coach-feedback', payload);
+    return data;
+  } catch (err) { return { ok: false, error: err.message }; }
+}
+
+// ---- Pakistan Culture Quest Pack ----------------------------------------
+export async function pkQuestCategories() {
+  try {
+    const { data } = await client.get('/api/pakistan-quest/categories');
+    return data;
+  } catch (err) { return { ok: false, error: err.message }; }
+}
+
+export async function pkQuestLevel({ category, difficulty, userId }) {
+  try {
+    const { data } = await slowClient.post('/api/pakistan-quest/level', { category, difficulty, userId });
+    return data;
+  } catch (err) { return { ok: false, error: err.message }; }
+}
+
+export async function pkQuestNote(word, lang = 'en') {
+  try {
+    const { data } = await client.get(`/api/pakistan-quest/note/${encodeURIComponent(word)}?lang=${lang}`);
+    return data;
+  } catch (err) { return { ok: false, error: err.message }; }
+}
+
+// Submit the finished round so the server can append it to this section's
+// last-10 window and adjust the next difficulty accordingly.
+export async function pkQuestResult({ userId, category, difficulty, passed, words, score }) {
+  try {
+    const { data } = await client.post('/api/pakistan-quest/result', {
+      userId, category, difficulty, passed, words, score,
+    });
+    return data;
+  } catch (err) { return { ok: false, error: err.message }; }
+}
+
+// ---- Safety Guardrail Agent --------------------------------------------
+export async function guardrailCheck({ content, type, ageGroup = 'kid', userId, context, allowList, useLLM }) {
+  try {
+    const { data } = await client.post('/api/guardrail/check', { content, type, ageGroup, userId, context, allowList, useLLM });
     return data;
   } catch (err) { return { ok: false, error: err.message }; }
 }
@@ -176,13 +245,22 @@ export async function learnGetUnit(unitId) {
   catch (err) { return { ok: false, error: err.message }; }
 }
 
-export async function learnGetLesson({ unitId, i = 0, type }) {
+export async function learnGetLesson({ unitId, i = 0, type, userId, attempt = 0 }) {
   try {
     const q = new URLSearchParams({ unitId: String(unitId), i: String(i) });
     if (type) q.set('type', type);
+    if (userId) q.set('userId', String(userId));
+    if (attempt) q.set('attempt', String(attempt));
     const { data } = await slowClient.get(`/api/learn/lesson?${q.toString()}`);
     return data;
   } catch (err) { return { ok: false, error: err.message }; }
+}
+
+// Submit a FULL lesson result. Returns { passed, motivational } — fail
+// gate keeps the player on this lesson until pass.
+export async function learnLessonResult(payload) {
+  try { const { data } = await slowClient.post('/api/learn/lesson-result', payload); return data; }
+  catch (err) { return { ok: false, error: err.message }; }
 }
 
 export async function learnSubmitAnswer(payload) {

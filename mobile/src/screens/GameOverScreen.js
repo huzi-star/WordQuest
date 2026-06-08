@@ -4,13 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const BG = require('../../home_design/home_bg.jpeg');
 import { saveStats, loadStats } from '../utils/storage';
-import { tierUpDelta } from '../utils/tiers';
+import { TIERS, tierUpDelta } from '../utils/tiers';
 import { getCoach } from '../utils/api';
 import { useTheme } from '../utils/theme';
 
 export default function GameOverScreen({ navigation, route }) {
   const theme = useTheme();
-  const { sessionStats = {} } = route.params || {};
+  const { sessionStats = {}, penaltyInfo = null, failed = false } = route.params || {};
   const {
     score = 0,
     round = 1,
@@ -27,9 +27,17 @@ export default function GameOverScreen({ navigation, route }) {
   const [coach, setCoach] = useState(null);
   const [coachLoading, setCoachLoading] = useState(true);
   const [pendingTierUp, setPendingTierUp] = useState(null);
+  // Penalty-driven tier-down (Quick Play fail) takes priority over tier-up.
+  const pendingTierDown = penaltyInfo?.downgrade || null;
 
   function navigateWithTierUpCheck(destRoute, destParams) {
-    if (pendingTierUp) {
+    if (pendingTierDown) {
+      navigation.replace('TierDown', {
+        ...pendingTierDown,
+        returnTo: destRoute,
+        returnParams: destParams,
+      });
+    } else if (pendingTierUp) {
       navigation.replace('TierUp', {
         ...pendingTierUp,
         returnTo: destRoute,
@@ -42,9 +50,12 @@ export default function GameOverScreen({ navigation, route }) {
 
   useEffect(() => {
     (async () => {
+      // Quick Play all-or-nothing: quit mid-round = fail = no points
+      // promoted to highScore. Passing 0 is a no-op since saveStats keeps
+      // the max — guarantees the partial in-round earnings never count.
       await saveStats({
-        highScore: Math.max(highScore, score),
-        bestStreak: Math.max(bestStreak, streak),
+        highScore: failed ? 0 : Math.max(highScore, score),
+        bestStreak: failed ? 0 : Math.max(bestStreak, streak),
       });
       // Tier-up check: totalScoreEver was already updated round-by-round
       // via logRound in RoundComplete. Compare to lastSeenTier.
@@ -83,9 +94,34 @@ export default function GameOverScreen({ navigation, route }) {
 
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <View style={styles.titlePlate}>
-            <Text style={styles.heading}>Game Over 🎮</Text>
+          <View style={[styles.titlePlate, failed && styles.titlePlateFail]}>
+            <Text style={styles.heading}>{failed ? 'Round Failed!' : 'Game Over 🎮'}</Text>
           </View>
+
+          {penaltyInfo ? (() => {
+            const newTier = TIERS.find((t) => t.key === penaltyInfo.newTier) || TIERS[0];
+            const droppedTo = penaltyInfo.downgrade
+              ? (TIERS.find((t) => t.key === penaltyInfo.downgrade.toTier) || TIERS[0])
+              : null;
+            return (
+              <View style={styles.penaltyCard}>
+                <Text style={styles.penaltyDelta}>−{penaltyInfo.penalty} points</Text>
+                <View style={styles.penaltyRow}>
+                  <View style={styles.penaltyCol}>
+                    <Text style={styles.penaltyLabel}>NEW TOTAL</Text>
+                    <Text style={styles.penaltyVal}>💰 {penaltyInfo.newTotal}</Text>
+                  </View>
+                  <View style={styles.penaltyCol}>
+                    <Text style={styles.penaltyLabel}>CURRENT TIER</Text>
+                    <Text style={styles.penaltyVal}>{newTier.emoji} {newTier.name}</Text>
+                  </View>
+                </View>
+                {droppedTo ? (
+                  <Text style={styles.tierDropText}>⬇ Tier dropped to {droppedTo.name}</Text>
+                ) : null}
+              </View>
+            );
+          })() : null}
 
           {/* Compact stat strip — no big Final Score box */}
           <View style={styles.row}>
@@ -158,7 +194,7 @@ export default function GameOverScreen({ navigation, route }) {
               })
             }
           >
-            <Text style={styles.restartText}>🔄 Play Again</Text>
+            <Text style={styles.restartText}>{failed ? '↻ Try Again' : '🔄 Play Again'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -193,6 +229,32 @@ const styles = StyleSheet.create({
   heading: {
     color: '#fff', fontSize: 28, fontWeight: '900', textAlign: 'center', letterSpacing: 0.5,
     textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 3 }, textShadowRadius: 3,
+  },
+
+  titlePlateFail: { backgroundColor: '#7f1d1d', borderColor: '#ef4444' },
+
+  penaltyCard: {
+    backgroundColor: 'rgba(127,29,29,0.85)',
+    borderRadius: 18, padding: 14,
+    borderWidth: 3, borderColor: '#ef4444',
+    borderBottomWidth: 7, borderBottomColor: '#450a0a',
+    alignItems: 'center',
+  },
+  penaltyDelta: {
+    color: '#fca5a5', fontSize: 28, fontWeight: '900',
+    textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 3,
+  },
+  penaltyRow: { flexDirection: 'row', gap: 12, marginTop: 10, alignSelf: 'stretch' },
+  penaltyCol: { flex: 1, alignItems: 'center' },
+  penaltyLabel: { color: '#fecaca', fontSize: 9, fontWeight: '900', letterSpacing: 1.2 },
+  penaltyVal: {
+    color: '#fff', fontSize: 15, fontWeight: '900', marginTop: 2,
+    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2,
+  },
+  tierDropText: {
+    color: '#fca5a5', fontSize: 13, fontWeight: '900', marginTop: 10,
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2,
   },
 
   row: { flexDirection: 'row', gap: 10 },

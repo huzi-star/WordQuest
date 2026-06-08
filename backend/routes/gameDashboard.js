@@ -247,7 +247,8 @@ const HTML = `<!doctype html>
   const TABS = [
     { id: 'all',          label: 'All',          icon: '📡', match: null,                     tag: 'agent' },
     { id: 'agent',        label: 'Agents',       icon: '🧠', match: (a) => !a.startsWith('event:'), tag: 'agent' },
-    { id: 'tier-up',      label: 'Tiers',        icon: '🏆', match: (a) => a === 'event:tier-up', tag: 'tier' },
+    { id: 'tier-up',      label: 'Tiers',        icon: '🏆', match: (a) => a === 'event:tier-up' || a === 'event:quick-play-fail', tag: 'tier' },
+    { id: 'practice',     label: 'Practice',     icon: '🦉', match: (a) => a === 'event:practice', tag: 'practice' },
     { id: 'subscription', label: 'Plans',        icon: '💎', match: (a) => a === 'event:subscription' || a === 'event:paywall-hit', tag: 'subscription' },
     { id: 'battle',       label: 'Battle',       icon: '⚔️', match: (a) => a === 'event:battle-queue' || a === 'event:battle-result', tag: 'battle' },
     { id: 'quiz',         label: 'Quiz',         icon: '❓', match: (a) => a === 'event:quiz-correct' || a === 'event:quiz-wrong' || a === 'event:quiz-session', tag: 'quiz' },
@@ -284,6 +285,8 @@ const HTML = `<!doctype html>
     // Map specific event names to broader tag colors used by .cat-tag[data-cat=...]
     const TAG_MAP = {
       'tier-up': 'tier',
+      'quick-play-fail': 'tier',
+      'practice': 'practice',
       'subscription': 'subscription',
       'paywall-hit': 'paywall',
       'battle-queue': 'battle', 'battle-result': 'battle',
