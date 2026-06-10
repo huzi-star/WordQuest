@@ -25,10 +25,10 @@
       "bundleIdentifier": "com.wordquest.pakistan",
       "icon": "./app-logo.jpeg"
     },
-    "owner": "umerkhattak07",
+    "owner": "huzipuzzles-team",
     "extra": {
       "eas": {
-        "projectId": "11eae396-24c9-4e4e-b278-8ad5f6d7bea5"
+        "projectId": "550dab28-85bb-4f44-a719-810bff2aceed"
       }
     }
   }
