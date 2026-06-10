@@ -455,6 +455,34 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </Animated.View>
 
+          {/* AI TUTOR — promoted from the Pro Max hub to a top-level Home card
+              so kids can jump straight into 1-on-1 chat. Purple themed.
+              Paywall logic is still enforced inside TutorScreen on entry. */}
+          <Animated.View
+            style={[
+              entryStyle('play'),
+              { transform: [...entryStyle('play').transform, { translateY: cardFloat }] },
+            ]}
+          >
+            <TouchableOpacity
+              activeOpacity={0.92}
+              delayPressIn={50}
+              onPress={() => { tapSfx(); navigation.navigate('Tutor'); }}
+              style={styles.tutorCard}
+            >
+              <View style={styles.tutorBody}>
+                <Text style={styles.tutorEmoji}>🤖</Text>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.tutorTitle}>AI TUTOR</Text>
+                  <Text style={styles.tutorSub}>1-on-1 chat · ask anything</Text>
+                </View>
+                <View style={styles.tutorBadge}>
+                  <Text style={styles.tutorBadgeText}>PRO MAX</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+
           {/* QUICK PLAY — bobbing, glowing, press-squishing, with an animated
               diagonal shine sweep crossing the surface. */}
           <Animated.View
@@ -1047,6 +1075,27 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: '#fff',
   },
   pkBadgeText: { color: '#78350f', fontWeight: '900', fontSize: 10, letterSpacing: 0.8 },
+
+  tutorCard: {
+    backgroundColor: '#6d28d9',
+    borderRadius: 22, padding: 14, marginBottom: 14,
+    borderWidth: 3, borderColor: '#fff',
+    borderBottomWidth: 8, borderBottomColor: '#3b0764',
+    shadowColor: '#a855f7', shadowOpacity: 0.55, shadowRadius: 12, shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
+    position: 'relative', overflow: 'hidden',
+  },
+  tutorBody: { flexDirection: 'row', alignItems: 'center' },
+  tutorEmoji: { fontSize: 38 },
+  tutorTitle: { color: '#fff', fontWeight: '900', fontSize: 17, letterSpacing: 1 },
+  tutorSub: { color: '#e9d5ff', fontSize: 11, marginTop: 2, fontWeight: '700' },
+  tutorBadge: {
+    paddingHorizontal: 8, paddingVertical: 4,
+    backgroundColor: '#fde68a',
+    borderRadius: 8,
+    borderWidth: 2, borderColor: '#fff',
+  },
+  tutorBadgeText: { color: '#78350f', fontWeight: '900', fontSize: 10, letterSpacing: 0.8 },
 
   practiceGlow: {
     position: 'absolute', left: 8, right: 8, top: 4, bottom: 4,
