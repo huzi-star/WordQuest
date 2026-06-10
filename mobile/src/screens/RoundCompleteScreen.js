@@ -422,11 +422,44 @@ export default function RoundCompleteScreen({ navigation, route }) {
                     </Text>
                   </View>
                   <Text style={styles.coachHeadline}>{coach.headline}</Text>
-                  {coach.outcome === 'loss' && Array.isArray(coach.improvements) && coach.improvements.length ? (
-                    <View style={{ marginTop: 10, gap: 6 }}>
+
+                  {/* GOOD POINTS — tricks that worked THIS round. Shown on
+                      every match (win + loss), so the kid always learns
+                      what to repeat. */}
+                  {Array.isArray(coach.goodMoves) && coach.goodMoves.length ? (
+                    <View style={{ marginTop: 12, gap: 4 }}>
+                      <Text style={styles.coachGoodTitle}>✅ GOOD POINTS</Text>
+                      {coach.goodMoves.map((g, i) => (
+                        <Text key={'gm' + i} style={styles.coachGoodLine}>• {g}</Text>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {/* LONG-TERM STRENGTHS — what the player consistently does
+                      well across the last N games. */}
+                  {Array.isArray(coach.strengths) && coach.strengths.length ? (
+                    <View style={{ marginTop: 10, gap: 4 }}>
+                      <Text style={styles.coachStrengthTitle}>💪 YOUR STRENGTHS</Text>
+                      {coach.strengths.map((s, i) => (
+                        <Text key={'st' + i} style={styles.coachStrengthLine}>
+                          • {typeof s === 'string' ? s : (s.label || s.key)}
+                        </Text>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {/* IMPROVEMENTS — shown on EVERY outcome. On a win these
+                      are lite "next time push for…" pointers; on a loss
+                      they're full diagnostics. Always paired 1:1 with
+                      howToFix. */}
+                  {Array.isArray(coach.improvements) && coach.improvements.length ? (
+                    <View style={{ marginTop: 12, gap: 6 }}>
+                      <Text style={styles.coachImpTitle}>
+                        {coach.outcome === 'win' ? '🎯 PUSH NEXT TIME' : '⚠ IMPROVE HERE'}
+                      </Text>
                       {coach.improvements.map((imp, i) => (
                         <View key={'imp' + i}>
-                          <Text style={styles.coachImp}>⚠ {imp}</Text>
+                          <Text style={styles.coachImp}>{coach.outcome === 'win' ? '•' : '⚠'} {imp}</Text>
                           {coach.howToFix?.[i] ? (
                             <Text style={styles.coachFix}>↳ {coach.howToFix[i]}</Text>
                           ) : null}
@@ -702,6 +735,11 @@ const styles = StyleSheet.create({
   coachHeadline: { color: '#fff', fontSize: 15, fontWeight: '800', lineHeight: 21, marginTop: 4 },
   coachImp: { color: '#fde68a', fontSize: 13, fontWeight: '700', lineHeight: 18 },
   coachFix: { color: '#bae6fd', fontSize: 12, fontWeight: '600', lineHeight: 17, marginLeft: 14, marginTop: 1 },
+  coachGoodTitle: { color: '#86efac', fontWeight: '900', fontSize: 11, letterSpacing: 1.2, marginBottom: 2 },
+  coachGoodLine: { color: '#dcfce7', fontSize: 13, fontWeight: '700', lineHeight: 18 },
+  coachStrengthTitle: { color: '#c4b5fd', fontWeight: '900', fontSize: 11, letterSpacing: 1.2, marginBottom: 2 },
+  coachStrengthLine: { color: '#ede9fe', fontSize: 13, fontWeight: '700', lineHeight: 18 },
+  coachImpTitle: { color: '#fcd34d', fontWeight: '900', fontSize: 11, letterSpacing: 1.2, marginBottom: 2 },
   coachNextTitle: {
     color: '#fcd34d', fontWeight: '900', fontSize: 11, letterSpacing: 1.2, marginBottom: 8,
   },

@@ -444,10 +444,12 @@ async function finalizeMatch(c, m) {
   let loserLine = '';
   let coachNextRounds = [];
   let coachHowToFix = [];
+  let coachWinner = null;
+  let coachLoser = null;
   try {
     if (winnerId) {
       const winnerSide = winner === 'a' ? { score: aScore, words: aWords } : { score: bScore, words: bWords };
-      // coachAgent in WIN mode = short motivational line, no critique.
+      // coachAgent WIN mode — full analysis (strengths + lite improvements).
       const winCoach = await coachAgent({
         outcome: 'win',
         mode: '1v1',
@@ -456,7 +458,9 @@ async function finalizeMatch(c, m) {
         totalWords,
         timeLeft: Math.max(0, timeLimitSec - elapsedSec),
         score: winnerSide.score,
+        opponentScore: winner === 'a' ? bScore : aScore,
         streak: 1, bestStreak: 1,
+        category: categoryName,
         language: 'english',
       });
       winnerLine = String(winCoach?.headline || '').trim();
@@ -473,6 +477,7 @@ async function finalizeMatch(c, m) {
       if (!winnerLine) winnerLine = 'Sharp play — you outpaced your opponent!';
       const safeWin = await guardText(winnerLine, 'tutor', { ageGroup: 'kid' });
       winnerLine = safeWin || 'Sharp play — you outpaced your opponent!';
+      coachWinner = winCoach || null;
     }
   } catch (_) { winnerLine = 'Sharp play — you outpaced your opponent!'; }
 
@@ -502,6 +507,7 @@ async function finalizeMatch(c, m) {
       loserLine = safeLose || 'Close one — scan diagonals next time.';
       coachNextRounds = Array.isArray(coach?.nextRounds) ? coach.nextRounds : [];
       coachHowToFix = Array.isArray(coach?.howToFix) ? coach.howToFix : [];
+      coachLoser = coach || null;
 
       // Persist coach's next-3-rounds prescription into the loser's
       // wq_player_memory.recommendations so HomeScreen "Recommended For
@@ -529,6 +535,11 @@ async function finalizeMatch(c, m) {
     coach: {
       nextRounds: coachNextRounds,
       howToFix: coachHowToFix,
+      // Per-side full coach payload — the mobile result screen reads
+      // `winner` / `loser` based on which side `me` is on, so every kid
+      // (winner OR loser) gets a personalised analysis on the screen.
+      winner: coachWinner,
+      loser: coachLoser,
     },
     a: { userId: m.player_a, score: aScore, words: aWords, mmrDelta: deltaA, newMmr: mmrA, foundAll: aAll, lastWordAt: m.last_word_a || null },
     b: { userId: m.player_b, score: bScore, words: bWords, mmrDelta: deltaB, newMmr: mmrB, foundAll: bAll, lastWordAt: m.last_word_b || null },

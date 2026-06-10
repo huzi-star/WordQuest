@@ -33,6 +33,70 @@ function motivationalLine(stats, summary) {
   return lines[idx];
 }
 
+// Detect what the player did WELL — both in THIS round and across the
+// last-10-games memory. Surfaced as "good points / tricks that worked"
+// on the reward screen after every match (win, loss, complete, fail).
+function detectStrengths(stats, summary) {
+  const strengths = [];
+  const goodMoves = []; // per-round "tricks that worked"
+  const completion = (stats.totalWords || 0) > 0
+    ? (stats.wordsFound || 0) / stats.totalWords
+    : 0;
+
+  // ---- Per-ROUND good moves ----
+  if (completion >= 1) {
+    goodMoves.push('Cleared the whole board — perfect completion.');
+  } else if (completion >= 0.8) {
+    goodMoves.push(`Found ${Math.round(completion * 100)}% of the words — strong sweep.`);
+  }
+  if ((stats.hintsUsed || 0) === 0 && (stats.wordsFound || 0) >= 3) {
+    goodMoves.push('Zero hints used — your brain did the work.');
+  }
+  if ((stats.streak || 0) >= 5) {
+    goodMoves.push(`${stats.streak}-word streak — your eyes locked on quick.`);
+  }
+  if ((stats.timeLeft || 0) >= 20) {
+    goodMoves.push(`Finished with ${stats.timeLeft}s left — fast scanning paid off.`);
+  }
+  if ((stats.opponentScore != null) && (stats.score || 0) > stats.opponentScore + 30) {
+    goodMoves.push(`Out-scored opponent by ${(stats.score || 0) - stats.opponentScore} — clean dominance.`);
+  }
+
+  // ---- Long-term strengths from memory ----
+  if (summary.strongCategories && summary.strongCategories.length) {
+    strengths.push({
+      key: 'strong_categories',
+      label: `Strong in ${summary.strongCategories.join(', ')}`,
+    });
+  }
+  if (summary.n >= 3 && (summary.winRate || 0) >= 0.7) {
+    strengths.push({
+      key: 'hot_winrate',
+      label: `Win rate ${Math.round(summary.winRate * 100)}% across last ${summary.n} games`,
+    });
+  }
+  if (summary.avgTimeLeftRatio >= 0.35 && summary.n >= 3) {
+    strengths.push({
+      key: 'fast_finisher',
+      label: 'Consistently finishing with time to spare',
+    });
+  }
+  if (summary.avgHintsPerRound != null && summary.avgHintsPerRound < 0.5 && summary.n >= 3) {
+    strengths.push({
+      key: 'low_hint_use',
+      label: 'Rarely uses hints — independent solver',
+    });
+  }
+  if (summary.avgCompletion >= 0.85 && summary.n >= 3) {
+    strengths.push({
+      key: 'high_completion',
+      label: `Averaging ${Math.round(summary.avgCompletion * 100)}% board clears`,
+    });
+  }
+
+  return { strengths, goodMoves };
+}
+
 function analyzeLossLocally(stats, summary) {
   const improvements = [];
   const howToFix = [];
@@ -159,28 +223,68 @@ async function coachAgent(stats = {}) {
   }
   const summary = summarizeLast10(last10);
 
-  // 2. WIN BRANCH — short motivational line, no critique.
+  // 2. WIN BRANCH — motivational headline PLUS a strengths-first analysis
+  // (good points / tricks that worked) AND optional lite improvements
+  // ("to win even bigger next time…") so the kid still learns something
+  // from a winning round.
   if (outcome === 'win') {
     const local = motivationalLine(stats, summary);
+    const { strengths, goodMoves } = detectStrengths(stats, summary);
     let line = local;
+    let improvements = [];
+    let howToFix = [];
     if (isConfigured()) {
       try {
-        const prompt = `Kid-safe AI coach. The player JUST WON a ${stats.mode || 'word puzzle'} round.
-Their recent record across last ${summary.n || 0} games: ${summary.wins} wins, ${summary.losses} losses.
-Write ONE short motivational line (max 14 words). Warm, kid-friendly, no sarcasm. ${language === 'english' ? 'English.' : 'Roman Urdu mixed with English.'}
-Return ONLY the line itself — no quotes, no JSON, nothing else.`;
+        const prompt = `You are a friendly, kid-safe AI coach for a word puzzle game (under-13 audience).
+The player just WON a ${stats.mode || 'round'}. Acknowledge the win warmly, then point out 1-2 small things they could push to make the NEXT win even bigger.
+
+Current round:
+- Mode: ${stats.mode || 'quick-play'}
+- Words found: ${stats.wordsFound || 0} / ${stats.totalWords || 0}
+- Time left: ${stats.timeLeft || 0}s
+- Hints used: ${stats.hintsUsed || 0}
+- Category: ${stats.category || 'Mix'}
+- Streak this round: ${stats.streak || 0}
+${stats.opponentScore != null ? `- Opponent score: ${stats.opponentScore}` : ''}
+
+LAST ${summary.n || 0} GAMES summary:
+- Win rate: ${((summary.winRate || 0) * 100).toFixed(0)}%
+- Avg board completion: ${((summary.avgCompletion || 0) * 100).toFixed(0)}%
+- Avg hints used per round: ${(summary.avgHintsPerRound || 0).toFixed(1)}
+- Strong categories: ${(summary.strongCategories || []).join(', ') || 'none yet'}
+
+Return STRICTLY valid JSON:
+{
+  "headline": "1 warm sentence celebrating the win (max 14 words)",
+  "improvements": ["1-2 LITE pointers — what to push next time (max 14 words each)"],
+  "howToFix":     ["1-2 short concrete actions, matched 1:1 (max 16 words each)"]
+}
+${language === 'english' ? 'Plain, warm English.' : 'Roman Urdu mixed with English (Pakistani coach voice).'}
+Forbidden: sarcasm, harsh words, comparisons to other players, "you should have…", anything that diminishes the win.`;
         const t = await generate(prompt, { agent: 'coachAgent',
-          timeoutMs: 12000, temperature: 0.75, maxTokens: 80 });
-        const cleaned = String(t || '').replace(/^["'`\s]+|["'`\s]+$/g, '').split(/\r?\n/)[0].trim();
-        if (cleaned) line = cleaned;
+          timeoutMs: 14000, temperature: 0.6, maxTokens: 500, responseFormat: 'json' });
+        const cleaned = String(t || '').replace(/```json|```/g, '').trim();
+        const a = cleaned.indexOf('{'), b = cleaned.lastIndexOf('}');
+        if (a >= 0 && b > a) {
+          const parsed = JSON.parse(cleaned.slice(a, b + 1));
+          if (parsed.headline) line = String(parsed.headline);
+          if (Array.isArray(parsed.improvements)) improvements = parsed.improvements.map(String);
+          if (Array.isArray(parsed.howToFix)) howToFix = parsed.howToFix.map(String);
+        }
       } catch (_) { /* keep local */ }
     }
-    const safe = await guardText(line, 'tutor', { ageGroup: 'kid', userId });
+    const safeHead = await guardText(line, 'tutor', { ageGroup: 'kid', userId });
+    const safeImp  = await guardArray(improvements, 'tutor', { ageGroup: 'kid', userId });
+    const safeFix  = await guardArray(howToFix,     'tutor', { ageGroup: 'kid', userId });
     return {
       outcome: 'win',
-      headline: safe || local,
+      headline: safeHead || local,
       motivational: true,
-      strengths: [], improvements: [], howToFix: [], nextRounds: [],
+      strengths,
+      goodMoves,
+      improvements: safeImp,
+      howToFix: safeFix,
+      nextRounds: [],
       memoryUsed: summary.n,
     };
   }
@@ -248,11 +352,17 @@ Forbidden: sarcasm, harsh words, comparisons to other players, any mention of fa
   // 5. Auto-generated next 3 rounds (judges' explicit ask).
   const nextRounds = nextThreeRounds(stats, summary, weakKeys);
 
+  // Strengths + per-round good moves are surfaced on losses too — even a
+  // tough round usually has a "what you did right" silver lining the kid
+  // can carry into the next match.
+  const { strengths: lossStrengths, goodMoves: lossGoodMoves } = detectStrengths(stats, summary);
+
   return {
     outcome: 'loss',
     headline: safeHead || local.headline,
     motivational: false,
-    strengths: [],
+    strengths: lossStrengths,
+    goodMoves: lossGoodMoves,
     improvements: safeImp.length ? safeImp : local.improvements,
     howToFix:    safeFix.length ? safeFix : local.howToFix,
     nextRounds,

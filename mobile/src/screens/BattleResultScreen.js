@@ -143,17 +143,54 @@ export default function BattleResultScreen({ route, navigation }) {
             </Text>
           </View>
 
-          {/* COACH AGENT — long-term-memory diagnosis on a LOSS only.
-              Shows the next 3 rounds the agent recommends + how to fix
-              the weaknesses it spotted from the last 10 games. */}
-          {isLoss && result.coach && Array.isArray(result.coach.howToFix) && result.coach.howToFix.length ? (
-            <View style={styles.coachCard}>
-              <Text style={styles.coachLabel}>🎓 COACH · WHAT TO FIX</Text>
-              {result.coach.howToFix.map((tip, i) => (
-                <Text key={'fix' + i} style={styles.coachFix}>↳ {tip}</Text>
-              ))}
-            </View>
-          ) : null}
+          {/* COACH AGENT — personalised analysis for BOTH winner and loser.
+              Good points + strengths + improvements + (loser only) next 3
+              rounds plan. Pulls last-10-games memory automatically. */}
+          {(() => {
+            const myCoach = isWin ? result.coach?.winner : isLoss ? result.coach?.loser : null;
+            if (!myCoach) return null;
+            return (
+              <View style={styles.coachCard}>
+                <Text style={styles.coachLabel}>🎓 COACH · LAST {myCoach.memoryUsed || 0} GAMES</Text>
+                {myCoach.headline ? (
+                  <Text style={styles.coachHeadline}>{myCoach.headline}</Text>
+                ) : null}
+                {Array.isArray(myCoach.goodMoves) && myCoach.goodMoves.length ? (
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={styles.coachSectionGood}>✅ GOOD POINTS</Text>
+                    {myCoach.goodMoves.map((g, i) => (
+                      <Text key={'gm' + i} style={styles.coachGoodLine}>• {g}</Text>
+                    ))}
+                  </View>
+                ) : null}
+                {Array.isArray(myCoach.strengths) && myCoach.strengths.length ? (
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={styles.coachSectionStrength}>💪 YOUR STRENGTHS</Text>
+                    {myCoach.strengths.map((s, i) => (
+                      <Text key={'st' + i} style={styles.coachStrengthLine}>
+                        • {typeof s === 'string' ? s : (s.label || s.key)}
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
+                {Array.isArray(myCoach.improvements) && myCoach.improvements.length ? (
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={styles.coachSectionImp}>
+                      {isWin ? '🎯 PUSH NEXT TIME' : '⚠ IMPROVE HERE'}
+                    </Text>
+                    {myCoach.improvements.map((imp, i) => (
+                      <View key={'imp' + i}>
+                        <Text style={styles.coachImpLine}>{isWin ? '•' : '⚠'} {imp}</Text>
+                        {myCoach.howToFix?.[i] ? (
+                          <Text style={styles.coachFix}>↳ {myCoach.howToFix[i]}</Text>
+                        ) : null}
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })()}
 
           {isLoss && result.coach && Array.isArray(result.coach.nextRounds) && result.coach.nextRounds.length ? (
             <View style={styles.coachCard}>
@@ -321,6 +358,13 @@ const styles = StyleSheet.create({
     color: '#7dd3fc', fontWeight: '900', fontSize: 11, letterSpacing: 1.2, marginBottom: 8,
   },
   coachFix: { color: '#bae6fd', fontSize: 13, fontWeight: '600', lineHeight: 19, marginBottom: 4 },
+  coachHeadline: { color: '#fff', fontSize: 15, fontWeight: '800', lineHeight: 21, marginBottom: 4 },
+  coachSectionGood: { color: '#86efac', fontWeight: '900', fontSize: 11, letterSpacing: 1.2, marginBottom: 2 },
+  coachGoodLine: { color: '#dcfce7', fontSize: 13, fontWeight: '700', lineHeight: 18 },
+  coachSectionStrength: { color: '#c4b5fd', fontWeight: '900', fontSize: 11, letterSpacing: 1.2, marginBottom: 2 },
+  coachStrengthLine: { color: '#ede9fe', fontSize: 13, fontWeight: '700', lineHeight: 18 },
+  coachSectionImp: { color: '#fcd34d', fontWeight: '900', fontSize: 11, letterSpacing: 1.2, marginBottom: 2 },
+  coachImpLine: { color: '#fde68a', fontSize: 13, fontWeight: '700', lineHeight: 18 },
   coachNextItem: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: 'rgba(8,47,73,0.7)',
