@@ -463,6 +463,28 @@ export default function BattleScreen({ route, navigation }) {
           </View>
           <View
             onStartShouldSetResponder={() => true}
+            onResponderRelease={() => {
+              // FINISH = lock in current score and let finalize run.
+              // Unlike Quit (forfeit), this counts every word the player
+              // already claimed and matches them against the opponent on
+              // points. Resolves the user's "I found 3 of 5 but match
+              // didn't end" complaint — they can now end immediately.
+              Alert.alert(
+                'Finish match?',
+                'Submit your current score now. You will see the result and your claimed words will count.',
+                [
+                  { text: 'Keep playing', style: 'cancel' },
+                  { text: 'Finish', style: 'default', onPress: () => { try { finish(); } catch (_) {} } },
+                ],
+                { cancelable: true },
+              );
+            }}
+            style={[styles.btn, styles.btnFinish]}
+          >
+            <Text style={styles.btnText}>✓ Finish</Text>
+          </View>
+          <View
+            onStartShouldSetResponder={() => true}
             onResponderRelease={confirmQuit}
             style={[styles.btn, styles.btnQuit]}
           >
@@ -530,8 +552,9 @@ const styles = StyleSheet.create({
     borderWidth: 3, borderColor: '#fff',
     borderBottomWidth: 6,
   },
-  btnClear: { backgroundColor: '#475569', borderBottomColor: '#0f172a' },
-  btnQuit:  { backgroundColor: '#dc2626', borderBottomColor: '#7f1d1d' },
+  btnClear:  { backgroundColor: '#475569', borderBottomColor: '#0f172a' },
+  btnFinish: { backgroundColor: '#22c55e', borderBottomColor: '#14532d' },
+  btnQuit:   { backgroundColor: '#dc2626', borderBottomColor: '#7f1d1d' },
   btnText: { color: '#fff', fontWeight: '900', fontSize: 14, letterSpacing: 0.5 },
   pName: {
     color: '#fff', fontWeight: '900', fontSize: 12,

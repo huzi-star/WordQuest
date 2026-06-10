@@ -190,6 +190,23 @@ export async function coachFeedback(payload) {
   } catch (err) { return { ok: false, error: err.message }; }
 }
 
+// Pulls the last-10-games coach summary for the Home screen.
+// Returns { recommendations: [...], outcome: 'win'|'loss', headline, summary }.
+// Used to render the "RECOMMENDED FOR YOU" card after every ranked match.
+export async function homeCoachRecs(userId, tier = null) {
+  try {
+    const { data } = await client.post('/api/coach', {
+      userId,
+      mode: 'home',
+      outcome: 'session',
+      language: 'english',
+      tier,
+    });
+    if (data && data.ok && data.result) return { ok: true, ...data.result };
+    return data;
+  } catch (err) { return { ok: false, error: err.message }; }
+}
+
 // ---- Pakistan Culture Quest Pack ----------------------------------------
 export async function pkQuestCategories() {
   try {

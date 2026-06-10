@@ -15,7 +15,7 @@ import { tierForScore, nextTier, tierUpDelta } from '../utils/tiers';
 // Module-scoped guard: even if `lastSeenTier` mysteriously fails to persist
 // (e.g. a syncDown race), only fire the catch-up TierUp once per app launch.
 let HOME_TIERUP_SHOWN = false;
-import { fetchWordOfDay, learnGetPath } from '../utils/api';
+import { fetchWordOfDay, learnGetPath, homeCoachRecs } from '../utils/api';
 import { usePlan, canUseDaily } from '../utils/plan';
 import { useSettings } from '../utils/settings';
 import { trace } from '../utils/trace';
@@ -39,6 +39,7 @@ export default function HomeScreen({ navigation }) {
   });
   const [wod, setWod] = useState(null);
   const [unit, setUnit] = useState(null);
+  const [coachRecs, setCoachRecs] = useState(null);
   const pulse = useRef(new Animated.Value(1)).current;
   const haloOpacity = useRef(new Animated.Value(0.45)).current;
   const playBob = useRef(new Animated.Value(0)).current;
@@ -230,6 +231,15 @@ export default function HomeScreen({ navigation }) {
           try {
             const p = await learnGetPath(user.id);
             if (!cancelled && p?.ok) setUnit(p);
+          } catch (_) {}
+          // AI Coach recs — runs after every focus so the home page
+          // always reflects the player's MOST recent ranked match.
+          // Win history → momentum-style recs. Loss history → improvement
+          // recs. Cold start → onboarding picks.
+          try {
+            const tierKey = tierForScore(stats.totalScoreEver || 0).key;
+            const cr = await homeCoachRecs(user.id, tierKey);
+            if (!cancelled && cr?.ok) setCoachRecs(cr);
           } catch (_) {}
         }
       })();
@@ -454,6 +464,51 @@ export default function HomeScreen({ navigation }) {
               </View>
             </TouchableOpacity>
           </Animated.View>
+
+          {/* RECOMMENDED FOR YOU — AI coach reads the last 10 ranked games
+              and picks the next 3 rounds. Win-streak players get momentum
+              recs (tier climb, 1v1). Loss-streak players get improvement
+              recs (no-hint Bronze, weak-category practice). Updates after
+              every match on focus. */}
+          {coachRecs && Array.isArray(coachRecs.nextRounds) && coachRecs.nextRounds.length ? (
+            <Animated.View style={[entryStyle('stats'), styles.recCard]}>
+              <View style={styles.recHeader}>
+                <Text style={[styles.recTitle, coachRecs.outcome === 'win' && { color: '#86efac' }]}>
+                  {coachRecs.outcome === 'win' ? '🚀 KEEP GOING — RECOMMENDED' : '🎯 BOUNCE BACK — RECOMMENDED'}
+                </Text>
+                <Text style={styles.recSub}>
+                  AI coach · last {coachRecs.memoryUsed || 0} ranked games
+                </Text>
+              </View>
+              {coachRecs.headline ? (
+                <Text style={styles.recHeadline}>{coachRecs.headline}</Text>
+              ) : null}
+              <View style={styles.recItems}>
+                {coachRecs.nextRounds.slice(0, 3).map((r, i) => (
+                  <TouchableOpacity
+                    key={'cr' + i}
+                    activeOpacity={0.85}
+                    style={styles.recItem}
+                    onPress={() => {
+                      tapSfx();
+                      if (r.mode === 'practice') navigation.navigate('Practice');
+                      else if (r.mode === '1v1') navigation.navigate('BattleQueue');
+                      else if (r.mode === 'tutor') navigation.navigate('Tutor');
+                      else if (r.mode === 'daily') navigation.navigate('DailyChallenge');
+                      else startAdaptive();
+                    }}
+                  >
+                    <View style={styles.recItemNum}><Text style={styles.recItemNumText}>{i + 1}</Text></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.recItemTitle}>{r.title}</Text>
+                      <Text style={styles.recItemRationale} numberOfLines={2}>{r.rationale}</Text>
+                    </View>
+                    <Text style={styles.recItemArrow}>›</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </Animated.View>
+          ) : null}
 
           {/* AI TUTOR — promoted from the Pro Max hub to a top-level Home card
               so kids can jump straight into 1-on-1 chat. Purple themed.
@@ -1025,6 +1080,7 @@ const styles = StyleSheet.create({
   recHeader: { marginBottom: 10 },
   recTitle: { color: '#fde68a', fontWeight: '900', fontSize: 13, letterSpacing: 1.4 },
   recSub: { color: '#cbd5e1', fontSize: 11, marginTop: 2, fontWeight: '700' },
+  recHeadline: { color: '#fff', fontSize: 13, fontWeight: '800', lineHeight: 19, marginBottom: 10 },
   recWeakRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
   recWeakChip: {
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,

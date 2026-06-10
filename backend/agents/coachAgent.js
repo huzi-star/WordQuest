@@ -212,7 +212,7 @@ function nextThreeRounds(stats, summary, weakKeys) {
 
 async function coachAgent(stats = {}) {
   const userId = stats.userId || null;
-  const outcome = String(stats.outcome || (stats.wordsFound >= stats.totalWords ? 'win' : 'session'))
+  let outcome = String(stats.outcome || (stats.wordsFound >= stats.totalWords ? 'win' : 'session'))
     .toLowerCase();
   const language = stats.language || 'english';
 
@@ -222,6 +222,13 @@ async function coachAgent(stats = {}) {
     try { last10 = await loadLast10(userId); } catch (_) { last10 = []; }
   }
   const summary = summarizeLast10(last10);
+
+  // Home-screen session call: pick branch from the last-10 win rate.
+  // No history yet → treat as "session" so the loss/session branch fires
+  // and the user gets cold-start improvement-style picks.
+  if (outcome === 'session' && summary.n >= 2) {
+    outcome = (summary.winRate || 0) >= 0.55 ? 'win' : 'loss';
+  }
 
   // 2. WIN BRANCH — motivational headline PLUS a strengths-first analysis
   // (good points / tricks that worked) AND optional lite improvements
@@ -276,6 +283,19 @@ Forbidden: sarcasm, harsh words, comparisons to other players, "you should have�
     const safeHead = await guardText(line, 'tutor', { ageGroup: 'kid', userId });
     const safeImp  = await guardArray(improvements, 'tutor', { ageGroup: 'kid', userId });
     const safeFix  = await guardArray(howToFix,     'tutor', { ageGroup: 'kid', userId });
+    // Momentum-style next 3 rounds — winner ko ye dikhe ki ab kya khelo:
+    // tier push, 1v1, harder challenge. Different shape from loss recs.
+    const winNext = [
+      { mode: 'quick-play', tier: 'silver',
+        title: 'Push to the Next Tier',
+        rationale: 'You\'re hot — climb to a tougher tier while the streak is alive.' },
+      { mode: '1v1',
+        title: '1v1 Battle — Test Your Skill',
+        rationale: 'Win streak detected — challenge a live opponent for MMR points.' },
+      { mode: 'daily',
+        title: 'Daily Challenge',
+        rationale: 'Lock in your streak with today\'s fixed-difficulty round.' },
+    ];
     return {
       outcome: 'win',
       headline: safeHead || local,
@@ -284,7 +304,7 @@ Forbidden: sarcasm, harsh words, comparisons to other players, "you should have�
       goodMoves,
       improvements: safeImp,
       howToFix: safeFix,
-      nextRounds: [],
+      nextRounds: winNext,
       memoryUsed: summary.n,
     };
   }
