@@ -380,7 +380,7 @@ export default function HomeScreen({ navigation }) {
               { transform: [...entryStyle('stats').transform, { rotate: statTilt.interpolate({ inputRange: [-1, 1], outputRange: ['-1.4deg', '1.4deg'] }) }] },
             ]}
           >
-            <StatCard icon={ICO_TROPHY} label="HIGH SCORE" value={stats.highScore} color="#ef4444" shadow="#7f1d1d" />
+            <StatCard icon={ICO_TROPHY} label="HIGH SCORE" value={stats.totalScoreEver || 0} color="#ef4444" shadow="#7f1d1d" />
             <StatCard icon={ICO_STREAK} label="STREAK" value={stats.bestStreak} color="#f97316" shadow="#7c2d12" />
             <StatCard icon={ICO_TARGET} label="PERFECT" value={stats.perfectRounds} color="#a855f7" shadow="#581c87" />
           </Animated.View>

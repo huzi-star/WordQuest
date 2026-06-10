@@ -232,7 +232,7 @@ export default function StatsScreen({ navigation }) {
 
           {/* Top stat pods */}
           <View style={styles.podRow}>
-            <StatPod icon="🏆" label="HIGH SCORE" value={stats.highScore} accent="#fcd34d" />
+            <StatPod icon="🏆" label="HIGH SCORE" value={stats.totalScoreEver || 0} accent="#fcd34d" />
             <StatPod icon="🔥" label="BEST STREAK" value={stats.bestStreak} accent="#f97316" />
           </View>
 

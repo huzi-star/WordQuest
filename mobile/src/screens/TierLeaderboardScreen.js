@@ -285,7 +285,7 @@ function Row({ row, isMe, accent }) {
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.username} numberOfLines={1}>{row.displayName}{isMe ? ' (you)' : ''}</Text>
-        <Text style={styles.metaLine}>High {row.highScore} · {row.totalGames} games</Text>
+        <Text style={styles.metaLine}>High {row.totalScore} · {row.totalGames} games</Text>
       </View>
       <View style={styles.scorePill}>
         <Text style={styles.starIcon}>⭐</Text>
