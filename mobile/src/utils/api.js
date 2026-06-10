@@ -181,7 +181,11 @@ export async function battleForfeitMatch({ matchId, userId }) {
 // + next-3-rounds prescription). Backed by wq_player_memory.coach_history.
 export async function coachFeedback(payload) {
   try {
-    const { data } = await slowClient.post('/api/coach-feedback', payload);
+    const { data } = await slowClient.post('/api/coach', payload);
+    // Backend returns { ok, result: {...coachPayload} } — flatten so the
+    // caller can read .headline / .strengths / .goodMoves directly without
+    // having to dig through .result.
+    if (data && data.ok && data.result) return { ok: true, ...data.result };
     return data;
   } catch (err) { return { ok: false, error: err.message }; }
 }

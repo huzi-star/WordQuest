@@ -116,30 +116,28 @@ export default function RoundCompleteScreen({ navigation, route }) {
         perfect: roundResult.wordsFound === roundResult.totalWords,
         hintsUsed: roundResult.hintsUsed || 0,
       });
-      // (learningPathAgent removed.) For Quick Play, still run coachAgent
-      // with last-10-game context: win → motivational line, loss → full
-      // diagnosis + next 3 rounds.
+      // Run coachAgent for EVERY round (Quick Play / Level / Daily) so
+      // the reward screen always carries an AI-personalised analysis —
+      // GOOD POINTS, STRENGTHS, and PUSH-NEXT-TIME / IMPROVE-HERE.
       if (user?.id) {
         const mode = roundResult.isDaily ? 'daily' : (roundResult.levelNumber > 0 ? 'level' : 'quick-play');
-        if (mode === 'quick-play') {
-          try {
-            const won = roundResult.wordsFound >= roundResult.totalWords;
-            const cf = await coachFeedback({
-              userId: user.id,
-              mode: 'quick-play',
-              outcome: won ? 'win' : 'loss',
-              wordsFound: roundResult.wordsFound || 0,
-              totalWords: roundResult.totalWords || 0,
-              timeLeft: roundResult.timeLeft || 0,
-              hintsUsed: roundResult.hintsUsed || 0,
-              category: roundResult.category || 'Mix',
-              score: roundResult.roundScore || 0,
-              bestStreak: roundResult.streak || 0,
-              streak: roundResult.streak || 0,
-            });
-            if (cf?.ok) setCoach(cf);
-          } catch (_) {}
-        }
+        try {
+          const won = roundResult.wordsFound >= roundResult.totalWords;
+          const cf = await coachFeedback({
+            userId: user.id,
+            mode,
+            outcome: won ? 'win' : 'loss',
+            wordsFound: roundResult.wordsFound || 0,
+            totalWords: roundResult.totalWords || 0,
+            timeLeft: roundResult.timeLeft || 0,
+            hintsUsed: roundResult.hintsUsed || 0,
+            category: roundResult.category || 'Mix',
+            score: roundResult.roundScore || 0,
+            bestStreak: roundResult.streak || 0,
+            streak: roundResult.streak || 0,
+          });
+          if (cf?.ok) setCoach(cf);
+        } catch (_) {}
       }
       // If this was a numbered level (1-15) and the player completed it,
       // unlock the next level AND record their score as the level's best.
